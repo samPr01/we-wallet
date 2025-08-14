@@ -6,11 +6,9 @@ import { RECEIVING_ADDRESSES } from '../lib/config';
 import { fetchBTCBalance, getBTCAddressInfo, isValidBTCAddress } from '../lib/bitcoin';
 import { 
   getBitcoinBalance, 
-  createBitcoinTransaction, 
-  broadcastBitcoinTransaction, 
   getTransactionDetails,
   isValidBitcoinAddress as validateBTCAddress 
-} from '../lib/bitcoin-transactions';
+} from '../lib/bitcoin-simple';
 import {
   getUSDTBalance,
   getUSDCBalance,

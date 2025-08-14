@@ -1,19 +1,33 @@
-import * as bitcoin from 'bitcoinjs-lib';
-import * as ecc from 'tiny-secp256k1';
-import { BIP32Factory } from 'bip32';
-import * as bip39 from 'bip39';
-
-// Initialize bitcoinjs-lib with secp256k1
-bitcoin.initEccLib(ecc);
-const bip32 = BIP32Factory(ecc);
+import { loadBitcoinLibraries, getBitcoinLibraries } from './bitcoin-loader.js';
 
 // Bitcoin network configuration
-const NETWORK = bitcoin.networks.bitcoin; // Mainnet
+let NETWORK = null; // Will be set after loading libraries
 const API_BASE_URL = 'https://api.blockcypher.com/v1/btc/main';
+
+// Initialize Bitcoin libraries
+let bitcoin, ecc, bip32, bip39;
+
+const initializeBitcoin = async () => {
+  if (!bitcoin) {
+    const libs = await loadBitcoinLibraries();
+    bitcoin = libs.bitcoin;
+    ecc = libs.ecc;
+    bip32 = libs.bip32;
+    bip39 = libs.bip39;
+    
+    // Set network after libraries are loaded
+    if (bitcoin.networks) {
+      NETWORK = bitcoin.networks.bitcoin; // Mainnet
+    }
+  }
+  return { bitcoin, ecc, bip32, bip39, NETWORK };
+};
 
 // Generate a new Bitcoin address for deposits
 export const generateBitcoinAddress = async () => {
   try {
+    const { bitcoin, bip32, bip39, NETWORK } = await initializeBitcoin();
+    
     // Generate a new mnemonic (in production, this would be stored securely)
     const mnemonic = bip39.generateMnemonic();
     const seed = await bip39.mnemonicToSeed(mnemonic);
@@ -131,7 +145,8 @@ export const createBitcoinTransaction = async (fromAddress, toAddress, amount, p
     }
     
     // Sign the transaction
-    const keyPair = bitcoin.ECPair.fromWIF(privateKey, NETWORK);
+    const { ECPair } = await import('bitcoinjs-lib');
+    const keyPair = ECPair.fromWIF(privateKey, NETWORK);
     psbt.signAllInputs(keyPair);
     
     // Finalize and extract transaction
@@ -203,8 +218,9 @@ export const getTransactionDetails = async (txid) => {
 };
 
 // Validate Bitcoin address
-export const isValidBitcoinAddress = (address) => {
+export const isValidBitcoinAddress = async (address) => {
   try {
+    const { bitcoin, NETWORK } = await initializeBitcoin();
     bitcoin.address.toOutputScript(address, NETWORK);
     return true;
   } catch (error) {
