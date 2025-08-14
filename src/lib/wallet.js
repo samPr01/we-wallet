@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { EthereumProvider } from '@walletconnect/ethereum-provider';
 import { getWalletConnectConfig } from './walletconnect-config';
+import { debugLog, debugError, debugWalletState, checkEnvironmentVariables } from './debug.js';
 
 let provider = null;
 let signer = null;
@@ -260,6 +261,10 @@ export const restoreWalletFromCookies = async () => {
 // Connect to a specific wallet type
 export const connectWallet = async (walletType = WALLET_TYPES.METAMASK) => {
   try {
+    debugLog('Attempting to connect wallet:', walletType);
+    debugWalletState();
+    checkEnvironmentVariables();
+    
     if (typeof window === 'undefined') {
       throw new Error('Wallet connection is only available in browser environment');
     }

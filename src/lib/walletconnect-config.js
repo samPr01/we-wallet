@@ -3,6 +3,14 @@
 
 import { WALLETCONNECT_CONFIG as CONFIG } from './config.js';
 
+// Get the current domain for metadata
+const getCurrentDomain = () => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return 'https://wewallet.vercel.app'; // fallback
+};
+
 export const WALLETCONNECT_CONFIG = {
   // This is a demo project ID - replace with your own from https://cloud.walletconnect.com/
   projectId: CONFIG.PROJECT_ID,
@@ -11,8 +19,8 @@ export const WALLETCONNECT_CONFIG = {
   metadata: {
     name: 'WalletBase',
     description: 'Decentralized Trading Platform',
-    url: 'https://wewallet.vercel.app',
-    icons: ['https://wewallet.vercel.app/favicon.ico']
+    url: getCurrentDomain(),
+    icons: [`${getCurrentDomain()}/favicon.ico`]
   },
   
   // Optional: Custom chains
