@@ -713,29 +713,54 @@ export default function LandingPage() {
     }
   };
 
-  // Generate 5-digit alphanumeric user ID
+  // Generate 5-digit alphanumerical user ID (letters and numbers)
   const generateUserId = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    const allChars = letters + numbers;
     let result = '';
-    for (let i = 0; i < 5; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    
+    // Ensure at least one letter and one number
+    result += letters.charAt(Math.floor(Math.random() * letters.length));
+    result += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    
+    // Fill remaining 3 positions with any alphanumerical character
+    for (let i = 2; i < 5; i++) {
+      result += allChars.charAt(Math.floor(Math.random() * allChars.length));
     }
-    return result;
+    
+    // Shuffle the result to make it more random
+    return result.split('').sort(() => Math.random() - 0.5).join('');
   };
 
-  // Generate user ID from wallet address for consistency
+  // Generate user ID from wallet address for consistency (alphanumerical)
   const generateUserIdFromAddress = (address) => {
     if (!address) return generateUserId();
     
-    // Create a consistent user ID based on wallet address
-    const hash = address.slice(2, 7).toUpperCase(); // Take first 5 chars after '0x'
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    // Create a consistent alphanumerical user ID based on wallet address
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    const allChars = letters + numbers;
     let result = '';
     
+    // Use wallet address to generate consistent alphanumerical ID
     for (let i = 0; i < 5; i++) {
       const charCode = address.charCodeAt(i + 2) || 0;
-      const index = charCode % chars.length;
-      result += chars[index];
+      const index = charCode % allChars.length;
+      result += allChars[index];
+    }
+    
+    // Ensure it contains both letters and numbers
+    if (!/[A-Z]/.test(result)) {
+      // If no letters, replace first character with a letter
+      const letterIndex = (address.charCodeAt(2) || 0) % letters.length;
+      result = letters[letterIndex] + result.slice(1);
+    }
+    
+    if (!/[0-9]/.test(result)) {
+      // If no numbers, replace last character with a number
+      const numberIndex = (address.charCodeAt(6) || 0) % numbers.length;
+      result = result.slice(0, -1) + numbers[numberIndex];
     }
     
     return result;
