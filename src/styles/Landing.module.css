@@ -1237,3 +1237,28 @@
     padding: 0.5rem 1rem;
   }
 }
+
+/* QR Code Styles */
+.qrCodeContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 1rem 0;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.qrCode {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.fileSelected {
+  font-size: 0.8rem;
+  color: #28a745;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}

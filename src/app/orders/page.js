@@ -16,67 +16,9 @@ export default function OrdersPage() {
   });
   const [activeTab, setActiveTab] = useState('active'); // 'active', 'history', 'pending'
   const [orders, setOrders] = useState({
-    active: [
-      {
-        id: 'ORD-001',
-        type: 'buy',
-        symbol: 'BTC',
-        amount: '0.001',
-        price: '121,496.76',
-        total: '121.50',
-        status: 'pending',
-        date: '2024-01-15 14:30:00',
-        txHash: '0x1234...5678'
-      },
-      {
-        id: 'ORD-002',
-        type: 'sell',
-        symbol: 'ETH',
-        amount: '0.5',
-        price: '3,248.19',
-        total: '1,624.10',
-        status: 'executed',
-        date: '2024-01-15 13:45:00',
-        txHash: '0xabcd...efgh'
-      }
-    ],
-    history: [
-      {
-        id: 'ORD-003',
-        type: 'buy',
-        symbol: 'SOL',
-        amount: '10',
-        price: '197.01',
-        total: '1,970.10',
-        status: 'completed',
-        date: '2024-01-14 16:20:00',
-        txHash: '0x9876...5432'
-      },
-      {
-        id: 'ORD-004',
-        type: 'sell',
-        symbol: 'ADA',
-        amount: '1000',
-        price: '0.4094',
-        total: '409.40',
-        status: 'cancelled',
-        date: '2024-01-13 11:15:00',
-        txHash: '0x5678...1234'
-      }
-    ],
-    pending: [
-      {
-        id: 'ORD-005',
-        type: 'buy',
-        symbol: 'BNB',
-        amount: '2',
-        price: '508.62',
-        total: '1,017.24',
-        status: 'pending',
-        date: '2024-01-15 15:00:00',
-        txHash: '0x1111...2222'
-      }
-    ]
+    active: [],
+    history: [],
+    pending: []
   });
 
   // Update time every second and initialize wallet

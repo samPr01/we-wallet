@@ -6,6 +6,7 @@ import { RECEIVING_ADDRESSES } from '../lib/config';
 import { fetchBTCBalance, getBTCAddressInfo, isValidBTCAddress } from '../lib/bitcoin';
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
+import QRCode from 'qrcode';
 
 export default function LandingPage() {
   const [walletAddress, setWalletAddress] = useState(null);
@@ -25,6 +26,11 @@ export default function LandingPage() {
   });
   const [availableWallets, setAvailableWallets] = useState([]);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [transactionHash, setTransactionHash] = useState('');
+  const [transactionScreenshot, setTransactionScreenshot] = useState(null);
+  const [userId, setUserId] = useState('');
 
   // Update time every second
   useEffect(() => {
@@ -180,6 +186,10 @@ export default function LandingPage() {
       }
       
       setWalletAddress(address);
+      // Generate user ID when wallet connects
+      const newUserId = generateUserId();
+      setUserId(newUserId);
+      console.log('Generated User ID:', newUserId);
     } catch (error) {
       console.error("Wallet connection failed:", error);
       console.error("Error details:", {
@@ -479,6 +489,76 @@ export default function LandingPage() {
     }
   };
 
+  // Generate QR code for address
+  const generateQRCode = async (address) => {
+    try {
+      const qrDataUrl = await QRCode.toDataURL(address, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodeDataUrl(qrDataUrl);
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+    }
+  };
+
+  // Generate 5-digit alphanumeric user ID
+  const generateUserId = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 5; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
+  // Handle proof submission
+  const handleProofSubmission = async () => {
+    if (!transactionHash || !transactionScreenshot) {
+      alert('Please provide both transaction hash and screenshot');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      // Here you would typically send this data to your backend
+      const proofData = {
+        userId,
+        walletAddress,
+        token: selectedToken,
+        transactionHash: transactionHash.slice(-6), // Last 6 digits
+        screenshot: transactionScreenshot,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log('Proof submitted:', proofData);
+      alert('Proof submitted successfully! Admin will review your deposit.');
+      
+      setShowProofModal(false);
+      setTransactionHash('');
+      setTransactionScreenshot(null);
+    } catch (error) {
+      console.error('Error submitting proof:', error);
+      alert('Error submitting proof. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setTransactionScreenshot(file);
+    } else {
+      alert('Please select a valid image file');
+    }
+  };
+
   const getBalanceDisplay = () => {
     if (!walletAddress) return 'Connect wallet to view address';
     
@@ -700,7 +780,10 @@ export default function LandingPage() {
           <div className={styles.walletActions}>
             <button 
               className={styles.actionButton}
-              onClick={() => setShowDepositModal(true)}
+              onClick={() => {
+                setShowDepositModal(true);
+                generateQRCode(getReceivingAddress(selectedToken));
+              }}
               disabled={!walletAddress}
             >
               <span className={styles.actionIcon}>↓</span>
@@ -734,23 +817,13 @@ export default function LandingPage() {
             </div>
             <div className={styles.modalBody}>
               <div className={styles.inputGroup}>
-                <label>Amount ({selectedToken})</label>
-                <input
-                  type="number"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="0.0"
-                  step={selectedToken === 'BTC' ? '0.00000001' : '0.001'}
-                  min="0"
-                  disabled={isProcessing}
-                  className={styles.modalInput}
-                />
-              </div>
-              <div className={styles.inputGroup}>
                 <label>Token</label>
                 <select 
                   value={selectedToken} 
-                  onChange={(e) => setSelectedToken(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedToken(e.target.value);
+                    generateQRCode(getReceivingAddress(e.target.value));
+                  }}
                   disabled={isProcessing}
                   className={styles.modalSelect}
                 >
@@ -775,6 +848,12 @@ export default function LandingPage() {
                       📋
                     </button>
                   </div>
+                  {qrCodeDataUrl && (
+                    <div className={styles.qrCodeContainer}>
+                      <img src={qrCodeDataUrl} alt="QR Code" className={styles.qrCode} />
+                      <p>Scan QR code to get the address</p>
+                    </div>
+                  )}
                   <p className={styles.addressNote}>
                     Send {selectedToken} to this address to complete your deposit
                   </p>
@@ -791,10 +870,78 @@ export default function LandingPage() {
               </button>
               <button 
                 className={styles.modalButtonPrimary}
-                onClick={handleDeposit}
-                disabled={isProcessing || !depositAmount || parseFloat(depositAmount) <= 0}
+                onClick={() => {
+                  setShowDepositModal(false);
+                  setShowProofModal(true);
+                }}
+                disabled={isProcessing}
               >
-                {isProcessing ? 'Processing...' : 'Deposit'}
+                Submit Proof
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proof Submission Modal */}
+      {showProofModal && (
+        <div className={styles.modalOverlay} onClick={() => !isProcessing && setShowProofModal(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Submit Transaction Proof</h3>
+              <button 
+                className={styles.modalClose}
+                onClick={() => setShowProofModal(false)}
+                disabled={isProcessing}
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.inputGroup}>
+                <label>Transaction Hash (Last 6 digits)</label>
+                <input
+                  type="text"
+                  value={transactionHash}
+                  onChange={(e) => setTransactionHash(e.target.value)}
+                  placeholder="Enter last 6 digits of transaction hash"
+                  disabled={isProcessing}
+                  className={styles.modalInput}
+                />
+              </div>
+              <div className={styles.inputGroup}>
+                <label>Transaction Screenshot</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={isProcessing}
+                  className={styles.modalInput}
+                />
+                {transactionScreenshot && (
+                  <p className={styles.fileSelected}>File selected: {transactionScreenshot.name}</p>
+                )}
+              </div>
+              <div className={styles.modalInfo}>
+                <p><strong>User ID:</strong> {userId}</p>
+                <p><strong>Token:</strong> {selectedToken}</p>
+                <p><strong>Wallet Address:</strong> {walletAddress}</p>
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <button 
+                className={styles.modalButtonSecondary}
+                onClick={() => setShowProofModal(false)}
+                disabled={isProcessing}
+              >
+                Cancel
+              </button>
+              <button 
+                className={styles.modalButtonPrimary}
+                onClick={handleProofSubmission}
+                disabled={isProcessing || !transactionHash || !transactionScreenshot}
+              >
+                {isProcessing ? 'Submitting...' : 'Submit Proof'}
               </button>
             </div>
           </div>
