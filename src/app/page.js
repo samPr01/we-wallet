@@ -723,7 +723,7 @@ export default function LandingPage() {
         <div className={styles.navRight}>
           <div className={styles.walletInfo}>
             <span className={styles.address}>
-              {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+              {userId || 'Loading...'}
             </span>
             <button onClick={handleDisconnect} className={styles.disconnectButton}>
               Disconnect
@@ -737,7 +737,7 @@ export default function LandingPage() {
         <div className={styles.walletCard}>
           <div className={styles.walletHeader}>
             <span className={styles.walletStatus}>
-              {walletAddress ? 'Wallet Connected' : 'No Wallet Connected'}
+              {walletAddress ? `User ID: ${userId}` : 'No Wallet Connected'}
             </span>
             <div className={styles.welcomeText}>
               Welcome! {currentTime.toLocaleDateString('en-US', { 
