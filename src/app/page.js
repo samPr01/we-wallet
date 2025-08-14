@@ -81,7 +81,11 @@ export default function LandingPage() {
         const restoredAddress = await restoreWalletFromCookies();
         if (restoredAddress) {
           setWalletAddress(restoredAddress);
+          // Generate user ID for restored wallet
+          const newUserId = generateUserIdFromAddress(restoredAddress);
+          setUserId(newUserId);
           console.log('Restored wallet from cookies:', restoredAddress);
+          console.log('Generated User ID for restored wallet:', newUserId);
         }
       } catch (error) {
         console.log('Wallet restoration failed:', error.message);
@@ -95,6 +99,15 @@ export default function LandingPage() {
       removeWalletListeners();
     };
   }, []);
+
+  // Generate user ID when wallet address changes
+  useEffect(() => {
+    if (walletAddress && !userId) {
+      const newUserId = generateUserIdFromAddress(walletAddress);
+      setUserId(newUserId);
+      console.log('Generated User ID for wallet:', newUserId);
+    }
+  }, [walletAddress, userId]);
 
   // Fetch crypto data on component mount
   useEffect(() => {
@@ -219,7 +232,7 @@ export default function LandingPage() {
       
       setWalletAddress(address);
       // Generate user ID when wallet connects
-      const newUserId = generateUserId();
+      const newUserId = generateUserIdFromAddress(address);
       setUserId(newUserId);
       console.log('Generated User ID:', newUserId);
     } catch (error) {
@@ -710,6 +723,24 @@ export default function LandingPage() {
     return result;
   };
 
+  // Generate user ID from wallet address for consistency
+  const generateUserIdFromAddress = (address) => {
+    if (!address) return generateUserId();
+    
+    // Create a consistent user ID based on wallet address
+    const hash = address.slice(2, 7).toUpperCase(); // Take first 5 chars after '0x'
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    
+    for (let i = 0; i < 5; i++) {
+      const charCode = address.charCodeAt(i + 2) || 0;
+      const index = charCode % chars.length;
+      result += chars[index];
+    }
+    
+    return result;
+  };
+
   // Handle proof submission
   const handleProofSubmission = async () => {
     if (!transactionHash || !transactionScreenshot) {
@@ -933,7 +964,7 @@ export default function LandingPage() {
         <div className={styles.walletCard}>
           <div className={styles.walletHeader}>
             <span className={styles.walletStatus}>
-              {walletAddress ? `User ID: ${userId}` : 'No Wallet Connected'}
+              {walletAddress ? (userId ? `User ID: ${userId}` : 'User ID: Loading...') : 'No Wallet Connected'}
             </span>
             <div className={styles.welcomeText}>
               Welcome! {currentTime.toLocaleDateString('en-US', { 
