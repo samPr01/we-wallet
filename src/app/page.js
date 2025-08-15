@@ -16,6 +16,7 @@ import {
   transferUSDC,
   getTokenInfo
 } from '../lib/usdt-transactions';
+import { createUserData, storeUserData, storeDepositProof, storeWithdrawalRequest } from '../lib/user-management';
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import QRCode from 'qrcode';
@@ -87,6 +88,11 @@ export default function LandingPage() {
           setUserId(newUserId);
           console.log('Restored wallet from cookies:', restoredAddress);
           console.log('Generated User ID for restored wallet:', newUserId);
+          
+          // Store user data for admin panel (if not already stored)
+          const userData = createUserData(newUserId, restoredAddress);
+          storeUserData(userData);
+          console.log('User data stored for admin panel (restored):', userData);
         }
       } catch (error) {
         console.log('Wallet restoration failed:', error.message);
@@ -236,6 +242,11 @@ export default function LandingPage() {
       const newUserId = generateUserIdFromAddress(address);
       setUserId(newUserId);
       console.log('Generated User ID:', newUserId);
+      
+      // Store user data for admin panel
+      const userData = createUserData(newUserId, address);
+      storeUserData(userData);
+      console.log('User data stored for admin panel:', userData);
     } catch (error) {
       console.error("Wallet connection failed:", error);
       console.error("Error details:", {
@@ -504,6 +515,17 @@ export default function LandingPage() {
         
         alert(`ETH withdrawal successful! Transaction hash: ${transaction.hash}`);
         
+        // Store withdrawal data for admin panel
+        const withdrawalData = {
+          userId,
+          walletAddress,
+          token: selectedToken,
+          amount: withdrawAmount,
+          destinationAddress: withdrawToAddress.trim(),
+          transactionHash: transaction.hash
+        };
+        storeWithdrawalRequest(withdrawalData);
+        
         // Refresh ETH balance
         const provider = getProvider();
         if (provider) {
@@ -542,6 +564,17 @@ export default function LandingPage() {
           // Note: In a real implementation, you would need the private key
           // For security reasons, this is handled server-side
           alert(`BTC withdrawal initiated!\n\nAmount: ${withdrawAmount} BTC\nTo: ${withdrawToAddress.trim()}\n\nNote: Real BTC transactions require private key access. This is a demonstration of the transaction flow.`);
+          
+          // Store withdrawal data for admin panel
+          const withdrawalData = {
+            userId,
+            walletAddress,
+            token: selectedToken,
+            amount: withdrawAmount,
+            destinationAddress: withdrawToAddress.trim(),
+            transactionHash: 'BTC_DEMO_' + Date.now()
+          };
+          storeWithdrawalRequest(withdrawalData);
           
           // Refresh BTC balance after a delay
           setTimeout(async () => {
@@ -600,6 +633,17 @@ export default function LandingPage() {
           
           alert(`USDT withdrawal successful!\n\nAmount: ${withdrawAmount} USDT\nTransaction Hash: ${result.txHash}`);
           
+          // Store withdrawal data for admin panel
+          const withdrawalData = {
+            userId,
+            walletAddress,
+            token: selectedToken,
+            amount: withdrawAmount,
+            destinationAddress: withdrawToAddress.trim(),
+            transactionHash: result.txHash
+          };
+          storeWithdrawalRequest(withdrawalData);
+          
           // Refresh USDT balance
           const newBalance = await getUSDTBalance(walletAddress, provider);
           setBalances(prev => ({
@@ -650,6 +694,17 @@ export default function LandingPage() {
           const result = await transferUSDC(depositAddress, withdrawToAddress.trim(), withdrawAmount, signer);
           
           alert(`USDC withdrawal successful!\n\nAmount: ${withdrawAmount} USDC\nTransaction Hash: ${result.txHash}`);
+          
+          // Store withdrawal data for admin panel
+          const withdrawalData = {
+            userId,
+            walletAddress,
+            token: selectedToken,
+            amount: withdrawAmount,
+            destinationAddress: withdrawToAddress.trim(),
+            transactionHash: result.txHash
+          };
+          storeWithdrawalRequest(withdrawalData);
           
           // Refresh USDC balance
           const newBalance = await getUSDCBalance(walletAddress, provider);
@@ -813,6 +868,10 @@ export default function LandingPage() {
       };
 
       console.log('Proof submitted:', proofData);
+      
+      // Store deposit proof for admin panel
+      storeDepositProof(proofData);
+      
       alert('Proof submitted successfully! Admin will review your deposit.');
       
       setShowProofModal(false);

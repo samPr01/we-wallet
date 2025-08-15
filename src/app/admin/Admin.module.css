@@ -139,6 +139,24 @@
   transform: translateY(-2px);
 }
 
+.refreshButton {
+  padding: 0.75rem 1.5rem;
+  background: #17a2b8;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 1rem;
+}
+
+.refreshButton:hover {
+  background: #138496;
+  transform: translateY(-2px);
+}
+
 /* Navigation Tabs */
 .tabs {
   display: flex;
