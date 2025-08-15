@@ -341,3 +341,28 @@
     min-width: 800px;
   }
 }
+
+/* Empty State Styles */
+.emptyState {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #888;
+}
+
+.emptyIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.emptyState h3 {
+  margin: 0 0 0.5rem 0;
+  color: #666;
+  font-size: 1.2rem;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
