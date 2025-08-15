@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import styles from './Admin.module.css';
 // import { getUsersData, getDepositsData, getWithdrawalsData } from '../lib/user-management';
+import { testFunction, testData } from '../lib/test-import';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -24,6 +25,10 @@ export default function AdminPage() {
   // Load admin data when authenticated
   useEffect(() => {
     if (isAuthenticated) {
+      // Test import functionality
+      console.log('Test function result:', testFunction());
+      console.log('Test data:', testData);
+      
       // Load real data from localStorage
       // const usersData = getUsersData();
       // const depositsData = getDepositsData();
