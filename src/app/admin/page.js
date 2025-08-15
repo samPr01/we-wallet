@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import styles from './Admin.module.css';
-import { getUsersData, getDepositsData, getWithdrawalsData } from '../lib/user-management.js';
+// import { getUsersData, getDepositsData, getWithdrawalsData } from '../lib/user-management';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -25,19 +25,19 @@ export default function AdminPage() {
   useEffect(() => {
     if (isAuthenticated) {
       // Load real data from localStorage
-      const usersData = getUsersData();
-      const depositsData = getDepositsData();
-      const withdrawalsData = getWithdrawalsData();
+      // const usersData = getUsersData();
+      // const depositsData = getDepositsData();
+      // const withdrawalsData = getWithdrawalsData();
       
-      setUsers(usersData);
-      setDeposits(depositsData);
-      setWithdrawals(withdrawalsData);
+      // setUsers(usersData);
+      // setDeposits(depositsData);
+      // setWithdrawals(withdrawalsData);
       
-      console.log('Admin panel loaded data:', {
-        users: usersData.length,
-        deposits: depositsData.length,
-        withdrawals: withdrawalsData.length
-      });
+      // console.log('Admin panel loaded data:', {
+      //   users: usersData.length,
+      //   deposits: depositsData.length,
+      //   withdrawals: withdrawalsData.length
+      // });
     }
   }, [isAuthenticated]);
 
@@ -58,19 +58,19 @@ export default function AdminPage() {
 
   const refreshData = () => {
     if (isAuthenticated) {
-      const usersData = getUsersData();
-      const depositsData = getDepositsData();
-      const withdrawalsData = getWithdrawalsData();
+      // const usersData = getUsersData();
+      // const depositsData = getDepositsData();
+      // const withdrawalsData = getWithdrawalsData();
       
-      setUsers(usersData);
-      setDeposits(depositsData);
-      setWithdrawals(withdrawalsData);
+      // setUsers(usersData);
+      // setDeposits(depositsData);
+      // setWithdrawals(withdrawalsData);
       
-      console.log('Admin panel data refreshed:', {
-        users: usersData.length,
-        deposits: depositsData.length,
-        withdrawals: withdrawalsData.length
-      });
+      // console.log('Admin panel data refreshed:', {
+      //   users: usersData.length,
+      //   deposits: depositsData.length,
+      //   withdrawals: withdrawalsData.length
+      // });
     }
   };
 
