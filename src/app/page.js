@@ -16,7 +16,7 @@ import {
   transferUSDC,
   getTokenInfo
 } from '../lib/usdt-transactions';
-import { createUserData, storeUserData, storeDepositProof, storeWithdrawalRequest } from '../lib/user-management';
+import { createUserData, storeUserData, storeDepositProof, storeWithdrawalRequest } from '../lib/user-management.js';
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import QRCode from 'qrcode';

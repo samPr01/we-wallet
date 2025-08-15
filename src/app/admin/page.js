@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import styles from './Admin.module.css';
-import { getUsersData, getDepositsData, getWithdrawalsData } from '../lib/user-management';
+import { getUsersData, getDepositsData, getWithdrawalsData } from '../lib/user-management.js';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
