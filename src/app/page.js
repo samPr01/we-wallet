@@ -905,6 +905,21 @@ export default function LandingPage() {
     return `${ethBalance} ETH | ${btcBalance} BTC | ${usdtBalance} USDT | ${usdcBalance} USDC`;
   };
 
+  const getBalanceDisplayLines = () => {
+    if (!walletAddress) return ['Connect wallet to view address'];
+    
+    const ethBalance = balances.ETH;
+    const btcBalance = balances.BTC;
+    const usdtBalance = balances.USDT;
+    const usdcBalance = balances.USDC;
+    return [
+      `${ethBalance} ETH`,
+      `${btcBalance} BTC`, 
+      `${usdtBalance} USDT`,
+      `${usdcBalance} USDC`
+    ];
+  };
+
   const gainingCoins = cryptoData.filter(coin => coin.priceChange > 0).length;
   const decliningCoins = cryptoData.filter(coin => coin.priceChange < 0).length;
   const totalVolume = cryptoData.reduce((sum, coin) => sum + coin.volume, 0);
@@ -1092,7 +1107,11 @@ export default function LandingPage() {
           
           <div className={styles.walletBalance}>
             <div className={styles.balanceAmount}>
-              {getBalanceDisplay()}
+              {getBalanceDisplayLines().map((balance, index) => (
+                <div key={index} className={styles.balanceLine}>
+                  {balance}
+                </div>
+              ))}
             </div>
             <div className={styles.balanceLabel}>Balance</div>
           </div>

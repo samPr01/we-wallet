@@ -410,9 +410,27 @@
 }
 
 .balanceAmount {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.balanceLine {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #ffffff;
+  padding: 0.25rem 0;
+  min-width: 200px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.balanceLine:last-child {
+  border-bottom: none;
 }
 
 .balanceLabel {
