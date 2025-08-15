@@ -1262,3 +1262,11 @@
   margin-top: 0.5rem;
   font-weight: 500;
 }
+
+.inputHelp {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 0.25rem;
+  display: block;
+  font-style: italic;
+}

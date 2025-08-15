@@ -45,6 +45,7 @@ export default function LandingPage() {
   const [transactionHash, setTransactionHash] = useState('');
   const [transactionScreenshot, setTransactionScreenshot] = useState(null);
   const [userId, setUserId] = useState('');
+  const [withdrawToAddress, setWithdrawToAddress] = useState('');
 
   // Update time every second
   useEffect(() => {
@@ -481,9 +482,19 @@ export default function LandingPage() {
           throw new Error('Wallet not connected');
         }
 
+        // Validate destination address
+        if (!withdrawToAddress.trim()) {
+          throw new Error('Please enter a destination address');
+        }
+        
+        // Basic Ethereum address validation
+        if (!withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
+          throw new Error('Please enter a valid Ethereum address (0x...)');
+        }
+
         const amountInWei = ethers.parseEther(withdrawAmount);
         const tx = {
-          to: walletAddress,
+          to: withdrawToAddress.trim(),
           value: amountInWei
         };
 
@@ -508,9 +519,14 @@ export default function LandingPage() {
         console.log('Processing real BTC withdrawal...');
         
         try {
+          // Validate destination address
+          if (!withdrawToAddress.trim()) {
+            throw new Error('Please enter a destination address');
+          }
+          
           // Validate Bitcoin address format
-          if (!validateBTCAddress(walletAddress)) {
-            throw new Error('Invalid Bitcoin address format');
+          if (!validateBTCAddress(withdrawToAddress.trim())) {
+            throw new Error('Please enter a valid Bitcoin address (bc1..., 1..., or 3...)');
           }
           
           // Get current BTC balance
@@ -525,7 +541,7 @@ export default function LandingPage() {
           // Create and broadcast the transaction
           // Note: In a real implementation, you would need the private key
           // For security reasons, this is handled server-side
-          alert(`BTC withdrawal initiated!\n\nAmount: ${withdrawAmount} BTC\nTo: ${walletAddress}\n\nNote: Real BTC transactions require private key access. This is a demonstration of the transaction flow.`);
+          alert(`BTC withdrawal initiated!\n\nAmount: ${withdrawAmount} BTC\nTo: ${withdrawToAddress.trim()}\n\nNote: Real BTC transactions require private key access. This is a demonstration of the transaction flow.`);
           
           // Refresh BTC balance after a delay
           setTimeout(async () => {
@@ -568,9 +584,19 @@ export default function LandingPage() {
             throw new Error(`Insufficient USDT balance. Available: ${currentBalance} USDT`);
           }
           
-          // Transfer USDT from deposit address to user
+          // Validate destination address
+          if (!withdrawToAddress.trim()) {
+            throw new Error('Please enter a destination address');
+          }
+          
+          // Basic Ethereum address validation for USDT
+          if (!withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
+            throw new Error('Please enter a valid Ethereum address for USDT (0x...)');
+          }
+          
+          // Transfer USDT from deposit address to destination
           const depositAddress = RECEIVING_ADDRESSES.USDT;
-          const result = await transferUSDT(depositAddress, walletAddress, withdrawAmount, signer);
+          const result = await transferUSDT(depositAddress, withdrawToAddress.trim(), withdrawAmount, signer);
           
           alert(`USDT withdrawal successful!\n\nAmount: ${withdrawAmount} USDT\nTransaction Hash: ${result.txHash}`);
           
@@ -609,9 +635,19 @@ export default function LandingPage() {
             throw new Error(`Insufficient USDC balance. Available: ${currentBalance} USDC`);
           }
           
-          // Transfer USDC from deposit address to user
+          // Validate destination address
+          if (!withdrawToAddress.trim()) {
+            throw new Error('Please enter a destination address');
+          }
+          
+          // Basic Ethereum address validation for USDC
+          if (!withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
+            throw new Error('Please enter a valid Ethereum address for USDC (0x...)');
+          }
+          
+          // Transfer USDC from deposit address to destination
           const depositAddress = RECEIVING_ADDRESSES.USDT; // Using same address for USDC
-          const result = await transferUSDC(depositAddress, walletAddress, withdrawAmount, signer);
+          const result = await transferUSDC(depositAddress, withdrawToAddress.trim(), withdrawAmount, signer);
           
           alert(`USDC withdrawal successful!\n\nAmount: ${withdrawAmount} USDC\nTransaction Hash: ${result.txHash}`);
           
@@ -1199,7 +1235,10 @@ export default function LandingPage() {
               <h3>Withdraw Funds</h3>
               <button 
                 className={styles.modalClose}
-                onClick={() => setShowWithdrawModal(false)}
+                onClick={() => {
+                  setShowWithdrawModal(false);
+                  setWithdrawToAddress('');
+                }}
                 disabled={isProcessing}
               >
                 ×
@@ -1234,6 +1273,20 @@ export default function LandingPage() {
                   <option value="USDC">USD Coin (USDC)</option>
                 </select>
               </div>
+              <div className={styles.inputGroup}>
+                <label>Destination Address</label>
+                <input
+                  type="text"
+                  value={withdrawToAddress}
+                  onChange={(e) => setWithdrawToAddress(e.target.value)}
+                  placeholder={selectedToken === 'BTC' ? 'bc1...' : '0x...'}
+                  disabled={isProcessing}
+                  className={styles.modalInput}
+                />
+                <small className={styles.inputHelp}>
+                  Paste the {selectedToken} address you want to withdraw to
+                </small>
+              </div>
               <div className={styles.modalInfo}>
                 <p>Available Balance: {getCurrentBalance()} {selectedToken}</p>
                 <p>Network: {selectedToken === 'BTC' ? 'Bitcoin Network' : 'Ethereum Mainnet'}</p>
@@ -1242,7 +1295,10 @@ export default function LandingPage() {
             <div className={styles.modalFooter}>
               <button 
                 className={styles.modalButtonSecondary}
-                onClick={() => setShowWithdrawModal(false)}
+                onClick={() => {
+                  setShowWithdrawModal(false);
+                  setWithdrawToAddress('');
+                }}
                 disabled={isProcessing}
               >
                 Cancel
@@ -1250,7 +1306,7 @@ export default function LandingPage() {
               <button 
                 className={styles.modalButtonPrimary}
                 onClick={handleWithdraw}
-                disabled={isProcessing || !withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > parseFloat(getCurrentBalance())}
+                disabled={isProcessing || !withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > parseFloat(getCurrentBalance()) || !withdrawToAddress.trim()}
               >
                 {isProcessing ? 'Processing...' : 'Withdraw'}
               </button>
