@@ -16,7 +16,6 @@ import {
   transferUSDC,
   getTokenInfo
 } from '../lib/usdt-transactions';
-import { createUserData, storeUserData, storeDepositProof, storeWithdrawalRequest } from '../lib/user-management';
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import QRCode from 'qrcode';
@@ -88,11 +87,6 @@ export default function LandingPage() {
           setUserId(newUserId);
           console.log('Restored wallet from cookies:', restoredAddress);
           console.log('Generated User ID for restored wallet:', newUserId);
-          
-          // Store user data for admin panel (if not already stored)
-          const userData = createUserData(newUserId, restoredAddress);
-          storeUserData(userData);
-          console.log('User data stored for admin panel (restored):', userData);
         }
       } catch (error) {
         console.log('Wallet restoration failed:', error.message);
@@ -175,13 +169,11 @@ export default function LandingPage() {
             // Fetch real BTC balance using our utility function
             let btcBalance = '0.00000000';
             try {
-              // Check if the wallet address is a valid Bitcoin address format
-              if (validateBTCAddress(walletAddress)) {
-                const btcBalanceValue = await getBitcoinBalance(walletAddress);
-                btcBalance = btcBalanceValue.toFixed(8);
-              } else {
-                console.warn('Wallet address is not a valid Bitcoin address format');
-              }
+              // For BTC, we need to use a different approach since walletAddress is Ethereum
+              // We'll use the deposit address to check BTC balance or create a mapping
+              // For now, we'll show a placeholder and handle BTC separately
+              console.log('BTC balance check: Wallet address is Ethereum format, BTC balance will be handled separately');
+              btcBalance = '0.00000000'; // Placeholder - in real app, you'd map Ethereum address to BTC address
             } catch (btcError) {
               console.warn('Error fetching BTC balance:', btcError);
             }
@@ -242,11 +234,6 @@ export default function LandingPage() {
       const newUserId = generateUserIdFromAddress(address);
       setUserId(newUserId);
       console.log('Generated User ID:', newUserId);
-      
-      // Store user data for admin panel
-      const userData = createUserData(newUserId, address);
-      storeUserData(userData);
-      console.log('User data stored for admin panel:', userData);
     } catch (error) {
       console.error("Wallet connection failed:", error);
       console.error("Error details:", {
@@ -334,14 +321,18 @@ export default function LandingPage() {
         console.log('Processing real BTC deposit...');
         
         try {
-          // Validate Bitcoin address format
-          if (!validateBTCAddress(walletAddress)) {
-            throw new Error('Invalid Bitcoin address format');
-          }
+          // For BTC deposits, we need to handle this differently since walletAddress is Ethereum
+          // In a real implementation, you would either:
+          // 1. Have users provide their BTC address separately
+          // 2. Use a mapping service to convert Ethereum address to BTC address
+          // 3. Use a multi-coin wallet that supports both
           
-          // Get current BTC balance
-          const currentBalance = await getBitcoinBalance(walletAddress);
-          console.log('Current BTC balance:', currentBalance);
+          console.log('BTC deposit: Using deposit address for balance check');
+          const depositAddress = RECEIVING_ADDRESSES.BTC;
+          
+          // Get current BTC balance from deposit address (this would be the platform's BTC balance)
+          const currentBalance = await getBitcoinBalance(depositAddress);
+          console.log('Platform BTC balance:', currentBalance);
           
           // Check if user has sufficient balance
           if (parseFloat(depositAmount) > currentBalance) {
@@ -349,7 +340,7 @@ export default function LandingPage() {
           }
           
           // Create and broadcast the transaction
-          const depositAddress = RECEIVING_ADDRESSES.BTC;
+          // depositAddress is already declared above
           
           // Note: In a real implementation, you would need the private key
           // For security reasons, this is handled server-side
@@ -358,7 +349,7 @@ export default function LandingPage() {
           // Refresh BTC balance after a delay
           setTimeout(async () => {
             try {
-              const newBtcBalance = await getBitcoinBalance(walletAddress);
+              const newBtcBalance = await getBitcoinBalance(depositAddress);
               setBalances(prev => ({
                 ...prev,
                 BTC: newBtcBalance.toFixed(8)
@@ -515,17 +506,6 @@ export default function LandingPage() {
         
         alert(`ETH withdrawal successful! Transaction hash: ${transaction.hash}`);
         
-        // Store withdrawal data for admin panel
-        const withdrawalData = {
-          userId,
-          walletAddress,
-          token: selectedToken,
-          amount: withdrawAmount,
-          destinationAddress: withdrawToAddress.trim(),
-          transactionHash: transaction.hash
-        };
-        storeWithdrawalRequest(withdrawalData);
-        
         // Refresh ETH balance
         const provider = getProvider();
         if (provider) {
@@ -565,21 +545,12 @@ export default function LandingPage() {
           // For security reasons, this is handled server-side
           alert(`BTC withdrawal initiated!\n\nAmount: ${withdrawAmount} BTC\nTo: ${withdrawToAddress.trim()}\n\nNote: Real BTC transactions require private key access. This is a demonstration of the transaction flow.`);
           
-          // Store withdrawal data for admin panel
-          const withdrawalData = {
-            userId,
-            walletAddress,
-            token: selectedToken,
-            amount: withdrawAmount,
-            destinationAddress: withdrawToAddress.trim(),
-            transactionHash: 'BTC_DEMO_' + Date.now()
-          };
-          storeWithdrawalRequest(withdrawalData);
-          
           // Refresh BTC balance after a delay
           setTimeout(async () => {
             try {
-              const newBtcBalance = await getBitcoinBalance(walletAddress);
+              // For BTC withdrawal, we should check the platform's BTC balance
+              const platformBtcAddress = RECEIVING_ADDRESSES.BTC;
+              const newBtcBalance = await getBitcoinBalance(platformBtcAddress);
               setBalances(prev => ({
                 ...prev,
                 BTC: newBtcBalance.toFixed(8)
@@ -633,17 +604,6 @@ export default function LandingPage() {
           
           alert(`USDT withdrawal successful!\n\nAmount: ${withdrawAmount} USDT\nTransaction Hash: ${result.txHash}`);
           
-          // Store withdrawal data for admin panel
-          const withdrawalData = {
-            userId,
-            walletAddress,
-            token: selectedToken,
-            amount: withdrawAmount,
-            destinationAddress: withdrawToAddress.trim(),
-            transactionHash: result.txHash
-          };
-          storeWithdrawalRequest(withdrawalData);
-          
           // Refresh USDT balance
           const newBalance = await getUSDTBalance(walletAddress, provider);
           setBalances(prev => ({
@@ -694,17 +654,6 @@ export default function LandingPage() {
           const result = await transferUSDC(depositAddress, withdrawToAddress.trim(), withdrawAmount, signer);
           
           alert(`USDC withdrawal successful!\n\nAmount: ${withdrawAmount} USDC\nTransaction Hash: ${result.txHash}`);
-          
-          // Store withdrawal data for admin panel
-          const withdrawalData = {
-            userId,
-            walletAddress,
-            token: selectedToken,
-            amount: withdrawAmount,
-            destinationAddress: withdrawToAddress.trim(),
-            transactionHash: result.txHash
-          };
-          storeWithdrawalRequest(withdrawalData);
           
           // Refresh USDC balance
           const newBalance = await getUSDCBalance(walletAddress, provider);
@@ -868,10 +817,6 @@ export default function LandingPage() {
       };
 
       console.log('Proof submitted:', proofData);
-      
-      // Store deposit proof for admin panel
-      storeDepositProof(proofData);
-      
       alert('Proof submitted successfully! Admin will review your deposit.');
       
       setShowProofModal(false);
@@ -903,21 +848,6 @@ export default function LandingPage() {
     const usdtBalance = balances.USDT;
     const usdcBalance = balances.USDC;
     return `${ethBalance} ETH | ${btcBalance} BTC | ${usdtBalance} USDT | ${usdcBalance} USDC`;
-  };
-
-  const getBalanceDisplayLines = () => {
-    if (!walletAddress) return ['Connect wallet to view address'];
-    
-    const ethBalance = balances.ETH;
-    const btcBalance = balances.BTC;
-    const usdtBalance = balances.USDT;
-    const usdcBalance = balances.USDC;
-    return [
-      `${ethBalance} ETH`,
-      `${btcBalance} BTC`, 
-      `${usdtBalance} USDT`,
-      `${usdcBalance} USDC`
-    ];
   };
 
   const gainingCoins = cryptoData.filter(coin => coin.priceChange > 0).length;
@@ -1107,11 +1037,7 @@ export default function LandingPage() {
           
           <div className={styles.walletBalance}>
             <div className={styles.balanceAmount}>
-              {getBalanceDisplayLines().map((balance, index) => (
-                <div key={index} className={styles.balanceLine}>
-                  {balance}
-                </div>
-              ))}
+              {getBalanceDisplay()}
             </div>
             <div className={styles.balanceLabel}>Balance</div>
           </div>

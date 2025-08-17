@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import styles from './Admin.module.css';
-// import { getUsersData, getDepositsData, getWithdrawalsData } from '../lib/user-management';
-import { testFunction, testData } from '../lib/test-import';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -25,24 +23,11 @@ export default function AdminPage() {
   // Load admin data when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      // Test import functionality
-      console.log('Test function result:', testFunction());
-      console.log('Test data:', testData);
-      
-      // Load real data from localStorage
-      // const usersData = getUsersData();
-      // const depositsData = getDepositsData();
-      // const withdrawalsData = getWithdrawalsData();
-      
-      // setUsers(usersData);
-      // setDeposits(depositsData);
-      // setWithdrawals(withdrawalsData);
-      
-      // console.log('Admin panel loaded data:', {
-      //   users: usersData.length,
-      //   deposits: depositsData.length,
-      //   withdrawals: withdrawalsData.length
-      // });
+      // In a real app, this would fetch data from a database or API
+      // For now, we'll start with empty arrays
+      setUsers([]);
+      setDeposits([]);
+      setWithdrawals([]);
     }
   }, [isAuthenticated]);
 
@@ -59,24 +44,6 @@ export default function AdminPage() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     setPassword('');
-  };
-
-  const refreshData = () => {
-    if (isAuthenticated) {
-      // const usersData = getUsersData();
-      // const depositsData = getDepositsData();
-      // const withdrawalsData = getWithdrawalsData();
-      
-      // setUsers(usersData);
-      // setDeposits(depositsData);
-      // setWithdrawals(withdrawalsData);
-      
-      // console.log('Admin panel data refreshed:', {
-      //   users: usersData.length,
-      //   deposits: depositsData.length,
-      //   withdrawals: withdrawalsData.length
-      // });
-    }
   };
 
   const formatDate = (dateString) => {
@@ -139,9 +106,6 @@ export default function AdminPage() {
           })}</p>
         </div>
         <div className={styles.headerRight}>
-          <button onClick={refreshData} className={styles.refreshButton}>
-            🔄 Refresh
-          </button>
           <button onClick={handleLogout} className={styles.logoutButton}>
             Logout
           </button>
