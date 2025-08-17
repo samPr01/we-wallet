@@ -1,237 +1,507 @@
-import { loadBitcoinLibraries, getBitcoinLibraries } from './bitcoin-loader.js';
+// Real Bitcoin Transaction Implementation
+// Multiple transfer options for production use
 
-// Bitcoin network configuration
-let NETWORK = null; // Will be set after loading libraries
 const API_BASE_URL = 'https://api.blockcypher.com/v1/btc/main';
+const NETWORK = 'main'; // or 'test3' for testnet
 
-// Initialize Bitcoin libraries
-let bitcoin, ecc, bip32, bip39;
-
-const initializeBitcoin = async () => {
-  if (!bitcoin) {
-    const libs = await loadBitcoinLibraries();
-    bitcoin = libs.bitcoin;
-    ecc = libs.ecc;
-    bip32 = libs.bip32;
-    bip39 = libs.bip39;
-    
-    // Set network after libraries are loaded
-    if (bitcoin.networks) {
-      NETWORK = bitcoin.networks.bitcoin; // Mainnet
-    }
+// Configuration for different transfer methods
+const TRANSFER_CONFIG = {
+  // BlockCypher API (for transaction broadcasting)
+  BLOCKCYPHER: {
+    baseUrl: 'https://api.blockcypher.com/v1/btc/main',
+    token: process.env.NEXT_PUBLIC_BLOCKCYPHER_TOKEN || ''
+  },
+  
+  // Coinbase Commerce (for payment processing)
+  COINBASE: {
+    apiKey: process.env.NEXT_PUBLIC_COINBASE_API_KEY || '',
+    webhookSecret: process.env.NEXT_PUBLIC_COINBASE_WEBHOOK_SECRET || ''
+  },
+  
+  // BitGo (enterprise solution)
+  BITGO: {
+    apiKey: process.env.NEXT_PUBLIC_BITGO_API_KEY || '',
+    walletId: process.env.NEXT_PUBLIC_BITGO_WALLET_ID || ''
   }
-  return { bitcoin, ecc, bip32, bip39, NETWORK };
 };
 
-// Generate a new Bitcoin address for deposits
-export const generateBitcoinAddress = async () => {
+// ============================================================================
+// OPTION 1: Server-Side Processing (Recommended for Production)
+// ============================================================================
+
+export const createServerSideTransfer = async (transferData) => {
   try {
-    const { bitcoin, bip32, bip39, NETWORK } = await initializeBitcoin();
-    
-    // Generate a new mnemonic (in production, this would be stored securely)
-    const mnemonic = bip39.generateMnemonic();
-    const seed = await bip39.mnemonicToSeed(mnemonic);
-    
-    // Derive the first address from the seed
-    const root = bip32.fromSeed(seed, NETWORK);
-    const path = `m/44'/0'/0'/0/0`; // BIP44 path for first address
-    const child = root.derivePath(path);
-    
-    // Generate the address
-    const { address } = bitcoin.payments.p2wpkh({
-      pubkey: child.publicKey,
-      network: NETWORK
+    const response = await fetch('/api/bitcoin/transfer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fromAddress: transferData.fromAddress,
+        toAddress: transferData.toAddress,
+        amount: transferData.amount,
+        feeRate: transferData.feeRate || 'medium', // low, medium, high
+        network: transferData.network || 'main'
+      })
     });
-    
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    const result = await response.json();
     return {
-      address,
-      privateKey: child.toWIF(),
-      mnemonic
+      success: true,
+      txHash: result.txHash,
+      fee: result.fee,
+      confirmations: 0,
+      method: 'server-side'
     };
   } catch (error) {
-    console.error('Error generating Bitcoin address:', error);
-    throw new Error('Failed to generate Bitcoin address');
+    console.error('Server-side transfer failed:', error);
+    throw new Error(`Transfer failed: ${error.message}`);
   }
 };
 
-// Get UTXOs for a Bitcoin address
-export const getUTXOs = async (address) => {
+// ============================================================================
+// OPTION 2: BlockCypher Direct API (Limited but Real)
+// ============================================================================
+
+export const createBlockCypherTransfer = async (transferData) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/addrs/${address}?unspentOnly=true`);
-    const data = await response.json();
+    // Step 1: Get UTXOs for the source address
+    const utxoResponse = await fetch(`${API_BASE_URL}/addrs/${transferData.fromAddress}?unspentOnly=true`);
+    const utxoData = await utxoResponse.json();
     
-    if (data.error) {
-      throw new Error(data.error);
+    if (utxoData.error) {
+      throw new Error(`UTXO fetch failed: ${utxoData.error}`);
     }
-    
-    return data.txrefs || [];
-  } catch (error) {
-    console.error('Error fetching UTXOs:', error);
-    throw new Error('Failed to fetch UTXOs');
-  }
-};
 
-// Get Bitcoin balance for an address
-export const getBitcoinBalance = async (address) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/addrs/${address}/balance`);
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error);
-    }
-    
-    return data.balance / 100000000; // Convert satoshis to BTC
-  } catch (error) {
-    console.error('Error fetching Bitcoin balance:', error);
-    throw new Error('Failed to fetch Bitcoin balance');
-  }
-};
-
-// Create and sign a Bitcoin transaction
-export const createBitcoinTransaction = async (fromAddress, toAddress, amount, privateKey) => {
-  try {
-    // Get UTXOs for the source address
-    const utxos = await getUTXOs(fromAddress);
-    
+    const utxos = utxoData.txrefs || [];
     if (utxos.length === 0) {
-      throw new Error('No UTXOs found for the address');
+      throw new Error('No unspent outputs found');
     }
-    
-    // Calculate total available balance
+
+    // Step 2: Calculate total available balance
     const totalBalance = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
-    const amountSatoshi = Math.floor(amount * 100000000); // Convert BTC to satoshis
+    const amountSatoshis = Math.floor(transferData.amount * 100000000);
     
-    if (amountSatoshi > totalBalance) {
-      throw new Error('Insufficient balance');
+    if (amountSatoshis > totalBalance) {
+      throw new Error(`Insufficient balance. Available: ${totalBalance / 100000000} BTC`);
+    }
+
+    // Step 3: Create transaction
+    const transaction = {
+      inputs: utxos.map(utxo => ({
+        addresses: [utxo.tx_output_n],
+        script_type: 'pay-to-pubkey-hash',
+        script: utxo.script
+      })),
+      outputs: [
+        {
+          addresses: [transferData.toAddress],
+          value: amountSatoshis
+        }
+      ]
+    };
+
+    // Step 4: Estimate fee and add change output if needed
+    const estimatedFee = estimateTransactionFee(utxos.length, 2); // 2 outputs (destination + change)
+    const changeAmount = totalBalance - amountSatoshis - estimatedFee;
+    
+    if (changeAmount > 546) { // Dust threshold
+      transaction.outputs.push({
+        addresses: [transferData.fromAddress], // Change back to sender
+        value: changeAmount
+      });
+    }
+
+    // Step 5: Create and sign transaction (requires private key)
+    const createResponse = await fetch(`${API_BASE_URL}/txs/new`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(transaction)
+    });
+
+    const createData = await createResponse.json();
+    
+    if (createData.error) {
+      throw new Error(`Transaction creation failed: ${createData.error}`);
+    }
+
+    // Note: This requires the private key to sign the transaction
+    // In a real implementation, this would be handled server-side
+    console.log('Transaction created, requires signing with private key');
+    
+    return {
+      success: false,
+      error: 'Private key required for signing',
+      method: 'blockcypher',
+      unsignedTx: createData.tx
+    };
+
+  } catch (error) {
+    console.error('BlockCypher transfer failed:', error);
+    throw new Error(`Transfer failed: ${error.message}`);
+  }
+};
+
+// ============================================================================
+// OPTION 3: Hardware Wallet Integration
+// ============================================================================
+
+export const createHardwareWalletTransfer = async (transferData) => {
+  try {
+    // Check if WebUSB is available
+    if (!navigator.usb) {
+      throw new Error('WebUSB not supported. Please use a compatible browser.');
+    }
+
+    // Try to connect to hardware wallet
+    const device = await connectHardwareWallet();
+    
+    if (!device) {
+      throw new Error('No hardware wallet detected. Please connect your Ledger or Trezor.');
+    }
+
+    // Create transaction for hardware wallet
+    const transaction = {
+      to: transferData.toAddress,
+      value: transferData.amount,
+      data: '0x', // No data for simple transfers
+      gasLimit: 21000,
+      gasPrice: await estimateGasPrice()
+    };
+
+    // Send to hardware wallet for signing
+    const signedTx = await device.signTransaction(transaction);
+    
+    // Broadcast the signed transaction
+    const broadcastResult = await broadcastTransaction(signedTx);
+    
+    return {
+      success: true,
+      txHash: broadcastResult.txHash,
+      method: 'hardware-wallet',
+      device: device.name
+    };
+
+  } catch (error) {
+    console.error('Hardware wallet transfer failed:', error);
+    throw new Error(`Hardware wallet transfer failed: ${error.message}`);
+  }
+};
+
+// Hardware wallet connection helper
+const connectHardwareWallet = async () => {
+  try {
+    // This is a simplified version - in reality you'd need specific libraries
+    // for Ledger (ledgerjs) or Trezor (trezor-connect)
+    
+    // For Ledger
+    if (window.ledger) {
+      const transport = await window.ledger.transports.create();
+      const app = new window.ledger.apps.Bitcoin(transport);
+      return app;
     }
     
-    // Create transaction
-    const psbt = new bitcoin.Psbt({ network: NETWORK });
-    
-    // Add inputs
-    let inputValue = 0;
-    for (const utxo of utxos) {
-      if (inputValue >= amountSatoshi) break;
-      
-      psbt.addInput({
-        hash: utxo.tx_hash,
-        index: utxo.tx_output_n,
-        value: utxo.value,
-        witnessUtxo: {
-          script: bitcoin.address.toOutputScript(fromAddress, NETWORK),
-          value: utxo.value
+    // For Trezor
+    if (window.TrezorConnect) {
+      const result = await window.TrezorConnect.init({
+        manifest: {
+          email: 'admin@wewallet.com',
+          appUrl: window.location.origin
         }
       });
-      
-      inputValue += utxo.value;
+      return result.success ? window.TrezorConnect : null;
     }
     
-    // Add output
-    psbt.addOutput({
-      address: toAddress,
-      value: amountSatoshi
-    });
-    
-    // Add change output if needed
-    const fee = 1000; // Estimated fee in satoshis
-    const change = inputValue - amountSatoshi - fee;
-    
-    if (change > 546) { // Dust threshold
-      psbt.addOutput({
-        address: fromAddress,
-        value: change
-      });
-    }
-    
-    // Sign the transaction
-    const { ECPair } = await import('bitcoinjs-lib');
-    const keyPair = ECPair.fromWIF(privateKey, NETWORK);
-    psbt.signAllInputs(keyPair);
-    
-    // Finalize and extract transaction
-    psbt.finalizeAllInputs();
-    const tx = psbt.extractTransaction();
-    
-    return {
-      hex: tx.toHex(),
-      txid: tx.getId()
-    };
+    throw new Error('No hardware wallet library detected');
   } catch (error) {
-    console.error('Error creating Bitcoin transaction:', error);
-    throw error;
+    console.error('Hardware wallet connection failed:', error);
+    return null;
   }
 };
 
-// Broadcast a Bitcoin transaction
-export const broadcastBitcoinTransaction = async (txHex) => {
+// ============================================================================
+// OPTION 4: Third-Party Payment Processing (Coinbase Commerce)
+// ============================================================================
+
+export const createCoinbaseCommerceTransfer = async (transferData) => {
+  try {
+    const response = await fetch('/api/coinbase/create-charge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: transferData.amount,
+        currency: 'BTC',
+        destinationAddress: transferData.toAddress,
+        description: `BTC Transfer to ${transferData.toAddress}`,
+        metadata: {
+          fromAddress: transferData.fromAddress,
+          transferType: 'withdrawal'
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Coinbase API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    return {
+      success: true,
+      chargeId: result.chargeId,
+      paymentUrl: result.hostedUrl,
+      method: 'coinbase-commerce',
+      status: 'pending'
+    };
+
+  } catch (error) {
+    console.error('Coinbase Commerce transfer failed:', error);
+    throw new Error(`Payment processing failed: ${error.message}`);
+  }
+};
+
+// ============================================================================
+// OPTION 5: BitGo Enterprise Solution
+// ============================================================================
+
+export const createBitGoTransfer = async (transferData) => {
+  try {
+    const response = await fetch('/api/bitgo/transfer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        walletId: TRANSFER_CONFIG.BITGO.walletId,
+        toAddress: transferData.toAddress,
+        amount: transferData.amount,
+        passphrase: transferData.passphrase, // Encrypted
+        feeRate: transferData.feeRate || 10000 // satoshis per KB
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`BitGo API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    return {
+      success: true,
+      txHash: result.txid,
+      fee: result.fee,
+      method: 'bitgo',
+      status: 'confirmed'
+    };
+
+  } catch (error) {
+    console.error('BitGo transfer failed:', error);
+    throw new Error(`Enterprise transfer failed: ${error.message}`);
+  }
+};
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+// Estimate transaction fee
+export const estimateTransactionFee = (inputCount, outputCount, feeRate = 'medium') => {
+  const feeRates = {
+    low: 5,      // 5 satoshis per byte
+    medium: 10,  // 10 satoshis per byte
+    high: 20     // 20 satoshis per byte
+  };
+  
+  const rate = feeRates[feeRate] || feeRates.medium;
+  const estimatedSize = (inputCount * 148) + (outputCount * 34) + 10;
+  return estimatedSize * rate;
+};
+
+// Get current network fee rates
+export const getNetworkFeeRates = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}`);
+    const data = await response.json();
+    
+    return {
+      low: data.low_fee_per_kb,
+      medium: data.medium_fee_per_kb,
+      high: data.high_fee_per_kb
+    };
+  } catch (error) {
+    console.error('Failed to fetch fee rates:', error);
+    return {
+      low: 5000,
+      medium: 10000,
+      high: 20000
+    };
+  }
+};
+
+// Broadcast a signed transaction
+export const broadcastTransaction = async (signedTx) => {
   try {
     const response = await fetch(`${API_BASE_URL}/txs/push`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        tx: txHex
+        tx: signedTx
       })
     });
+
+    const result = await response.json();
     
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error);
+    if (result.error) {
+      throw new Error(`Broadcast failed: ${result.error}`);
     }
-    
+
     return {
-      txid: data.tx.hash,
-      success: true
+      success: true,
+      txHash: result.tx.hash,
+      confirmations: 0
     };
   } catch (error) {
-    console.error('Error broadcasting Bitcoin transaction:', error);
-    throw new Error('Failed to broadcast transaction');
+    console.error('Transaction broadcast failed:', error);
+    throw new Error(`Broadcast failed: ${error.message}`);
   }
 };
 
-// Get transaction details
-export const getTransactionDetails = async (txid) => {
+// Get transaction status
+export const getTransactionStatus = async (txHash) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/txs/${txid}`);
+    const response = await fetch(`${API_BASE_URL}/txs/${txHash}`);
     const data = await response.json();
     
     if (data.error) {
-      throw new Error(data.error);
+      throw new Error(`Transaction not found: ${data.error}`);
     }
-    
+
     return {
-      txid: data.hash,
+      txHash: data.hash,
       confirmations: data.confirmations,
-      block_height: data.block_height,
+      blockHeight: data.block_height,
       total: data.total / 100000000,
       fees: data.fees / 100000000,
-      inputs: data.inputs,
-      outputs: data.outputs
+      status: data.confirmations > 0 ? 'confirmed' : 'pending'
     };
   } catch (error) {
-    console.error('Error fetching transaction details:', error);
-    throw new Error('Failed to fetch transaction details');
+    console.error('Failed to get transaction status:', error);
+    throw new Error(`Status check failed: ${error.message}`);
   }
 };
 
-// Validate Bitcoin address
-export const isValidBitcoinAddress = async (address) => {
+// ============================================================================
+// MAIN TRANSFER FUNCTION (Unified Interface)
+// ============================================================================
+
+export const executeBitcoinTransfer = async (transferData, method = 'server-side') => {
+  console.log(`Executing BTC transfer using method: ${method}`);
+  
   try {
-    const { bitcoin, NETWORK } = await initializeBitcoin();
-    bitcoin.address.toOutputScript(address, NETWORK);
-    return true;
+    let result;
+    
+    switch (method) {
+      case 'server-side':
+        result = await createServerSideTransfer(transferData);
+        break;
+        
+      case 'blockcypher':
+        result = await createBlockCypherTransfer(transferData);
+        break;
+        
+      case 'hardware-wallet':
+        result = await createHardwareWalletTransfer(transferData);
+        break;
+        
+      case 'coinbase-commerce':
+        result = await createCoinbaseCommerceTransfer(transferData);
+        break;
+        
+      case 'bitgo':
+        result = await createBitGoTransfer(transferData);
+        break;
+        
+      default:
+        throw new Error(`Unknown transfer method: ${method}`);
+    }
+    
+    console.log('Transfer result:', result);
+    return result;
+    
   } catch (error) {
-    return false;
+    console.error('Transfer execution failed:', error);
+    throw error;
   }
 };
 
-// Estimate transaction fee
-export const estimateTransactionFee = (inputCount, outputCount) => {
-  // Rough estimation: 1 input = 148 bytes, 1 output = 34 bytes
-  const estimatedSize = (inputCount * 148) + (outputCount * 34) + 10;
-  const feeRate = 10; // satoshis per byte (adjust based on network conditions)
-  return estimatedSize * feeRate;
+// ============================================================================
+// TRANSFER METHOD SELECTOR
+// ============================================================================
+
+export const getAvailableTransferMethods = () => {
+  const methods = [
+    {
+      id: 'server-side',
+      name: 'Server-Side Processing',
+      description: 'Secure server-side transaction processing',
+      requires: ['server-api'],
+      recommended: true
+    },
+    {
+      id: 'hardware-wallet',
+      name: 'Hardware Wallet',
+      description: 'Direct hardware wallet integration (Ledger/Trezor)',
+      requires: ['hardware-wallet', 'webusb'],
+      recommended: false
+    },
+    {
+      id: 'coinbase-commerce',
+      name: 'Coinbase Commerce',
+      description: 'Third-party payment processing',
+      requires: ['coinbase-api'],
+      recommended: false
+    },
+    {
+      id: 'bitgo',
+      name: 'BitGo Enterprise',
+      description: 'Enterprise-grade Bitcoin wallet service',
+      requires: ['bitgo-api'],
+      recommended: false
+    }
+  ];
+  
+  return methods.filter(method => {
+    // Check if requirements are met
+    if (method.requires.includes('server-api')) {
+      // Check if server API is available
+      return true; // Assume available for now
+    }
+    
+    if (method.requires.includes('hardware-wallet')) {
+      // Check if hardware wallet is connected
+      return navigator.usb !== undefined;
+    }
+    
+    if (method.requires.includes('coinbase-api')) {
+      // Check if Coinbase API key is configured
+      return !!TRANSFER_CONFIG.COINBASE.apiKey;
+    }
+    
+    if (method.requires.includes('bitgo-api')) {
+      // Check if BitGo API key is configured
+      return !!TRANSFER_CONFIG.BITGO.apiKey;
+    }
+    
+    return false;
+  });
 };

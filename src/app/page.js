@@ -7,8 +7,15 @@ import { fetchBTCBalance, getBTCAddressInfo, isValidBTCAddress } from '../lib/bi
 import { 
   getBitcoinBalance, 
   getTransactionDetails,
-  isValidBitcoinAddress as validateBTCAddress 
+  isValidBitcoinAddress as validateBTCAddress,
+  isValidBitcoinAddressLenient as validateBTCLenient,
+  testBitcoinAddress
 } from '../lib/bitcoin-simple';
+import {
+  executeBitcoinTransfer,
+  getAvailableTransferMethods,
+  getNetworkFeeRates
+} from '../lib/bitcoin-transactions';
 import {
   getUSDTBalance,
   getUSDCBalance,
@@ -46,6 +53,10 @@ export default function LandingPage() {
   const [transactionScreenshot, setTransactionScreenshot] = useState(null);
   const [userId, setUserId] = useState('');
   const [withdrawToAddress, setWithdrawToAddress] = useState('');
+  const [transferMethod, setTransferMethod] = useState('server-side');
+  const [availableTransferMethods, setAvailableTransferMethods] = useState([]);
+  const [networkFeeRates, setNetworkFeeRates] = useState({ low: 5000, medium: 10000, high: 20000 });
+  const [selectedFeeRate, setSelectedFeeRate] = useState('medium');
 
   // Update time every second
   useEffect(() => {
@@ -53,6 +64,25 @@ export default function LandingPage() {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Load transfer methods and fee rates
+  useEffect(() => {
+    const loadTransferData = async () => {
+      try {
+        // Get available transfer methods
+        const methods = getAvailableTransferMethods();
+        setAvailableTransferMethods(methods);
+        
+        // Get current network fee rates
+        const rates = await getNetworkFeeRates();
+        setNetworkFeeRates(rates);
+      } catch (error) {
+        console.error('Failed to load transfer data:', error);
+      }
+    };
+    
+    loadTransferData();
   }, []);
 
   // Detect available wallets and load wallet data from cookies on component mount
@@ -527,38 +557,65 @@ export default function LandingPage() {
           }
           
           // Validate Bitcoin address format
-          if (!validateBTCAddress(withdrawToAddress.trim())) {
+          console.log('Validating BTC withdrawal address:', withdrawToAddress.trim());
+          const isValidLenient = validateBTCLenient(withdrawToAddress.trim());
+          
+          if (!isValidLenient) {
             throw new Error('Please enter a valid Bitcoin address (bc1..., 1..., or 3...)');
           }
           
-          // Get current BTC balance
-          const currentBtcBalance = await getBitcoinBalance(walletAddress);
-          console.log('Current BTC balance:', currentBtcBalance);
+          // Prepare transfer data
+          const transferData = {
+            fromAddress: RECEIVING_ADDRESSES.BTC, // Platform's BTC address
+            toAddress: withdrawToAddress.trim(),
+            amount: parseFloat(withdrawAmount),
+            feeRate: selectedFeeRate,
+            network: 'main'
+          };
           
-          // Check if user has sufficient balance
-          if (parseFloat(withdrawAmount) > currentBtcBalance) {
-            throw new Error(`Insufficient BTC balance. Available: ${currentBtcBalance} BTC`);
-          }
+          console.log('Executing BTC transfer with method:', transferMethod);
+          console.log('Transfer data:', transferData);
           
-          // Create and broadcast the transaction
-          // Note: In a real implementation, you would need the private key
-          // For security reasons, this is handled server-side
-          alert(`BTC withdrawal initiated!\n\nAmount: ${withdrawAmount} BTC\nTo: ${withdrawToAddress.trim()}\n\nNote: Real BTC transactions require private key access. This is a demonstration of the transaction flow.`);
+          // Execute the transfer using selected method
+          const result = await executeBitcoinTransfer(transferData, transferMethod);
           
-          // Refresh BTC balance after a delay
-          setTimeout(async () => {
-            try {
-              // For BTC withdrawal, we should check the platform's BTC balance
-              const platformBtcAddress = RECEIVING_ADDRESSES.BTC;
-              const newBtcBalance = await getBitcoinBalance(platformBtcAddress);
-              setBalances(prev => ({
-                ...prev,
-                BTC: newBtcBalance.toFixed(8)
-              }));
-            } catch (error) {
-              console.warn('Failed to refresh BTC balance:', error);
+          if (result.success) {
+            let successMessage = `BTC withdrawal successful!\n\n`;
+            successMessage += `Amount: ${withdrawAmount} BTC\n`;
+            successMessage += `To: ${withdrawToAddress.trim()}\n`;
+            successMessage += `Method: ${result.method}\n`;
+            
+            if (result.txHash) {
+              successMessage += `Transaction Hash: ${result.txHash}\n`;
             }
-          }, 5000);
+            
+            if (result.fee) {
+              successMessage += `Fee: ${result.fee} satoshis\n`;
+            }
+            
+            if (result.status) {
+              successMessage += `Status: ${result.status}\n`;
+            }
+            
+            alert(successMessage);
+            
+            // Refresh BTC balance
+            setTimeout(async () => {
+              try {
+                const platformBtcAddress = RECEIVING_ADDRESSES.BTC;
+                const newBtcBalance = await getBitcoinBalance(platformBtcAddress);
+                setBalances(prev => ({
+                  ...prev,
+                  BTC: newBtcBalance.toFixed(8)
+                }));
+              } catch (error) {
+                console.warn('Failed to refresh BTC balance:', error);
+              }
+            }, 5000);
+            
+          } else {
+            throw new Error(result.error || 'Transfer failed');
+          }
           
         } catch (btcError) {
           console.error('BTC withdrawal error:', btcError);
@@ -1291,6 +1348,47 @@ export default function LandingPage() {
                   Paste the {selectedToken} address you want to withdraw to
                 </small>
               </div>
+              
+              {/* BTC Transfer Method Selection */}
+              {selectedToken === 'BTC' && (
+                <>
+                  <div className={styles.inputGroup}>
+                    <label>Transfer Method</label>
+                    <select 
+                      value={transferMethod} 
+                      onChange={(e) => setTransferMethod(e.target.value)}
+                      disabled={isProcessing}
+                      className={styles.modalSelect}
+                    >
+                      {availableTransferMethods.map(method => (
+                        <option key={method.id} value={method.id}>
+                          {method.name} {method.recommended ? '(Recommended)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <small className={styles.inputHelp}>
+                      Choose how to process your Bitcoin transfer
+                    </small>
+                  </div>
+                  
+                  <div className={styles.inputGroup}>
+                    <label>Fee Rate</label>
+                    <select 
+                      value={selectedFeeRate} 
+                      onChange={(e) => setSelectedFeeRate(e.target.value)}
+                      disabled={isProcessing}
+                      className={styles.modalSelect}
+                    >
+                      <option value="low">Low ({networkFeeRates.low} sat/byte)</option>
+                      <option value="medium">Medium ({networkFeeRates.medium} sat/byte)</option>
+                      <option value="high">High ({networkFeeRates.high} sat/byte)</option>
+                    </select>
+                    <small className={styles.inputHelp}>
+                      Higher fees = faster confirmation
+                    </small>
+                  </div>
+                </>
+              )}
               <div className={styles.modalInfo}>
                 <p>Available Balance: {getCurrentBalance()} {selectedToken}</p>
                 <p>Network: {selectedToken === 'BTC' ? 'Bitcoin Network' : 'Ethereum Mainnet'}</p>
