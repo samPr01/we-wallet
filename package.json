@@ -6,19 +6,22 @@
     "dev": "next dev --turbopack --port 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "deploy": "next build && netlify deploy --prod --dir=.next"
   },
   "dependencies": {
     "@walletconnect/ethereum-provider": "^2.16.1",
     "@walletconnect/web3-provider": "^1.8.0",
-            "ethers": "^6.14.4",
-        "next": "15.3.4",
-        "qrcode": "^1.5.3",
     "bitcoinjs-lib": "^6.1.5",
-        "react": "^19.0.0",
-        "react-dom": "^19.0.0",
-        "viem": "^2.33.3",
-        "wagmi": "^2.16.3",
-        "web3modal": "^1.9.12"
+    "ecpair": "^3.0.0",
+    "ethers": "^6.14.4",
+    "next": "15.3.4",
+    "qrcode": "^1.5.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tiny-secp256k1": "^2.2.4",
+    "viem": "^2.33.3",
+    "wagmi": "^2.16.3",
+    "web3modal": "^1.9.12"
   }
 }

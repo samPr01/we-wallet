@@ -2,7 +2,7 @@
 const nextConfig = {
   // Enable WebAssembly experiments
   experimental: {
-    asyncWebAssembly: true,
+    
   },
   
   // Webpack configuration for WebAssembly support
@@ -10,7 +10,7 @@ const nextConfig = {
     // Handle WebAssembly modules
     config.experiments = {
       ...config.experiments,
-      asyncWebAssembly: true,
+      
       syncWebAssembly: true,
     };
 

@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
-import bitcoin from 'bitcoinjs-lib';
+import * as bitcoin from 'bitcoinjs-lib';
+import { ECPairFactory } from 'ecpair';
+import * as ecc from 'tiny-secp256k1';
 
 // Bitcoin network configuration
 const NETWORK = bitcoin.networks.bitcoin; // Mainnet
 const API_BASE_URL = 'https://api.blockcypher.com/v1/btc/main';
+
+// Initialize ECPair
+const ECPair = ECPairFactory(ecc);
 
 // Environment variables for secure key management
 const PLATFORM_PRIVATE_KEY = process.env.BITCOIN_PRIVATE_KEY;
@@ -107,9 +112,9 @@ export async function POST(request) {
       high: 20
     };
 
-    const feeRate = feeRates[feeRate] || feeRates.medium;
+    const selectedFeeRate = feeRates[feeRate] || feeRates.medium;
     const estimatedSize = (selectedUtxos.length * 148) + (2 * 34) + 10; // 2 outputs (destination + change)
-    const estimatedFee = estimatedSize * feeRate;
+    const estimatedFee = estimatedSize * selectedFeeRate;
 
     const changeAmount = inputValue - amountSatoshis - estimatedFee;
 
@@ -122,7 +127,7 @@ export async function POST(request) {
 
     // Step 5: Sign the transaction
     try {
-      const keyPair = bitcoin.ECPair.fromWIF(PLATFORM_PRIVATE_KEY, NETWORK);
+      const keyPair = ECPair.fromWIF(PLATFORM_PRIVATE_KEY, NETWORK);
       psbt.signAllInputs(keyPair);
       psbt.finalizeAllInputs();
     } catch (error) {
