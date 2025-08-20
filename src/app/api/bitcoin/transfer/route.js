@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 import * as bitcoin from 'bitcoinjs-lib';
 import { ECPairFactory } from 'ecpair';
 import * as ecc from 'tiny-secp256k1';
@@ -14,10 +14,9 @@ const ECPair = ECPairFactory(ecc);
 const PLATFORM_PRIVATE_KEY = process.env.BITCOIN_PRIVATE_KEY;
 const BLOCKCYPHER_TOKEN = process.env.BLOCKCYPHER_TOKEN;
 
-export async function POST(request) {
+export async function POST(req) {
   try {
-    const body = await request.json();
-    const { fromAddress, toAddress, amount, feeRate = 'medium', network = 'main' } = body;
+    const { fromAddress, toAddress, amount, feePreference = 'medium', network = 'main' } = await req.json();
 
     // Validate input
     if (!fromAddress || !toAddress || !amount) {
@@ -106,14 +105,18 @@ export async function POST(request) {
     });
 
     // Step 4: Calculate fee and add change output
+    // ✅ FIX: Define fee rates (satoshis per byte)
     const feeRates = {
       low: 5,
       medium: 10,
       high: 20
     };
 
-    const selectedFeeRate = feeRates[feeRate] || feeRates.medium;
-    const estimatedSize = (selectedUtxos.length * 148) + (2 * 34) + 10; // 2 outputs (destination + change)
+    // ✅ FIX: avoid redeclaration bug
+    const selectedFeeRate = feeRates[feePreference] || feeRates.medium;
+
+    // Estimate size of transaction
+    const estimatedSize = selectedUtxos.length * 148 + 2 * 34 + 10; // 2 outputs (destination + change)
     const estimatedFee = estimatedSize * selectedFeeRate;
 
     const changeAmount = inputValue - amountSatoshis - estimatedFee;
@@ -163,9 +166,11 @@ export async function POST(request) {
 
     // Step 7: Return success response
     return NextResponse.json({
-      success: true,
+      status: "success",
       txHash: broadcastData.tx.hash,
-      fee: estimatedFee,
+      feeRateUsed: selectedFeeRate,
+      estimatedSize,
+      estimatedFee,
       confirmations: 0,
       method: 'server-side',
       amount: amount,
@@ -174,9 +179,9 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error('Bitcoin transfer API error:', error);
+    console.error("Transfer API error:", error);
     return NextResponse.json(
-      { error: `Internal server error: ${error.message}` },
+      { status: "error", message: error.message },
       { status: 500 }
     );
   }
