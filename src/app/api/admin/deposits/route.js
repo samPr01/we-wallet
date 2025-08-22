@@ -1,40 +1,13 @@
 import { NextResponse } from 'next/server';
-
-// Mock data storage (in a real app, this would be a database)
-let deposits = [];
-let users = [];
-
-// Load data from localStorage (this is a simplified approach)
-const loadData = () => {
-  if (typeof window !== 'undefined') {
-    try {
-      const storedDeposits = localStorage.getItem('walletbase_deposits');
-      const storedUsers = localStorage.getItem('walletbase_users');
-      
-      if (storedDeposits) deposits = JSON.parse(storedDeposits);
-      if (storedUsers) users = JSON.parse(storedUsers);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
-  }
-};
-
-// Save data to localStorage
-const saveData = () => {
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('walletbase_deposits', JSON.stringify(deposits));
-      localStorage.setItem('walletbase_users', JSON.stringify(users));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
-  }
-};
+import { connectToDatabase } from '../../../../lib/mongodb';
 
 // GET - Fetch all deposits
 export async function GET() {
   try {
-    loadData();
+    const { db } = await connectToDatabase();
+    const collection = db.collection('deposits');
+    
+    const deposits = await collection.find({}).sort({ submissionDate: -1 }).toArray();
     
     return NextResponse.json({
       success: true,
@@ -56,40 +29,43 @@ export async function POST(request) {
     const body = await request.json();
     const { userId, walletAddress, token, amount, transactionHash, screenshot } = body;
     
-    loadData();
-    
-    // Validate required fields
     if (!userId || !walletAddress || !token || !amount) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: 'Missing required fields: userId, walletAddress, token, amount' },
         { status: 400 }
       );
     }
     
+    const { db } = await connectToDatabase();
+    const depositsCollection = db.collection('deposits');
+    const usersCollection = db.collection('users');
+    
     // Create new deposit
     const newDeposit = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-      userId,
-      walletAddress,
-      token,
+      userId: userId,
+      walletAddress: walletAddress.toLowerCase(),
+      token: token,
       amount: parseFloat(amount),
       transactionHash: transactionHash || '',
       screenshot: screenshot || null,
       status: 'pending',
-      submissionDate: new Date().toISOString(),
+      submissionDate: new Date(),
       processedDate: null,
       adminNotes: ''
     };
     
-    deposits.push(newDeposit);
-    saveData();
+    const result = await depositsCollection.insertOne(newDeposit);
+    newDeposit._id = result.insertedId;
     
     // Update user's total deposits
-    const userIndex = users.findIndex(user => user.userId === userId);
-    if (userIndex !== -1) {
-      users[userIndex].totalDeposits += parseFloat(amount);
-      saveData();
-    }
+    await usersCollection.updateOne(
+      { userId: userId },
+      { 
+        $inc: { 
+          totalDeposits: parseFloat(amount) 
+        } 
+      }
+    );
     
     return NextResponse.json({
       success: true,
@@ -111,30 +87,44 @@ export async function PUT(request) {
     const body = await request.json();
     const { depositId, status, adminNotes, transactionHash } = body;
     
-    loadData();
+    if (!depositId || !status) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields: depositId, status' },
+        { status: 400 }
+      );
+    }
     
-    const depositIndex = deposits.findIndex(deposit => deposit.id === depositId);
-    if (depositIndex === -1) {
+    const { db } = await connectToDatabase();
+    const collection = db.collection('deposits');
+    
+    const updateData = {
+      status: status,
+      processedDate: new Date(),
+      adminNotes: adminNotes || ''
+    };
+    
+    if (transactionHash) {
+      updateData.transactionHash = transactionHash;
+    }
+    
+    const result = await collection.updateOne(
+      { _id: depositId },
+      { $set: updateData }
+    );
+    
+    if (result.matchedCount === 0) {
       return NextResponse.json(
         { success: false, error: 'Deposit not found' },
         { status: 404 }
       );
     }
     
-    // Update deposit
-    deposits[depositIndex].status = status;
-    deposits[depositIndex].processedDate = new Date().toISOString();
-    deposits[depositIndex].adminNotes = adminNotes || '';
-    
-    if (transactionHash) {
-      deposits[depositIndex].transactionHash = transactionHash;
-    }
-    
-    saveData();
+    // Get updated deposit
+    const updatedDeposit = await collection.findOne({ _id: depositId });
     
     return NextResponse.json({
       success: true,
-      deposit: deposits[depositIndex],
+      deposit: updatedDeposit,
       message: `Deposit ${status} successfully`
     });
   } catch (error) {

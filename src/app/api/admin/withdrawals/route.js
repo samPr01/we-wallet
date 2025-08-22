@@ -1,40 +1,13 @@
 import { NextResponse } from 'next/server';
-
-// Mock data storage (in a real app, this would be a database)
-let withdrawals = [];
-let users = [];
-
-// Load data from localStorage (this is a simplified approach)
-const loadData = () => {
-  if (typeof window !== 'undefined') {
-    try {
-      const storedWithdrawals = localStorage.getItem('walletbase_withdrawals');
-      const storedUsers = localStorage.getItem('walletbase_users');
-      
-      if (storedWithdrawals) withdrawals = JSON.parse(storedWithdrawals);
-      if (storedUsers) users = JSON.parse(storedUsers);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
-  }
-};
-
-// Save data to localStorage
-const saveData = () => {
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('walletbase_withdrawals', JSON.stringify(withdrawals));
-      localStorage.setItem('walletbase_users', JSON.stringify(users));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
-  }
-};
+import { connectToDatabase } from '../../../../lib/mongodb';
 
 // GET - Fetch all withdrawals
 export async function GET() {
   try {
-    loadData();
+    const { db } = await connectToDatabase();
+    const collection = db.collection('withdrawals');
+    
+    const withdrawals = await collection.find({}).sort({ requestDate: -1 }).toArray();
     
     return NextResponse.json({
       success: true,
@@ -56,41 +29,44 @@ export async function POST(request) {
     const body = await request.json();
     const { userId, walletAddress, token, amount, destinationAddress, transferMethod } = body;
     
-    loadData();
-    
-    // Validate required fields
     if (!userId || !walletAddress || !token || !amount || !destinationAddress) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: 'Missing required fields: userId, walletAddress, token, amount, destinationAddress' },
         { status: 400 }
       );
     }
     
+    const { db } = await connectToDatabase();
+    const withdrawalsCollection = db.collection('withdrawals');
+    const usersCollection = db.collection('users');
+    
     // Create new withdrawal
     const newWithdrawal = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-      userId,
-      walletAddress,
-      token,
+      userId: userId,
+      walletAddress: walletAddress.toLowerCase(),
+      token: token,
       amount: parseFloat(amount),
-      destinationAddress,
+      destinationAddress: destinationAddress,
       transferMethod: transferMethod || 'server-side',
       status: 'pending',
-      requestDate: new Date().toISOString(),
+      requestDate: new Date(),
       processedDate: null,
       transactionHash: null,
       adminNotes: ''
     };
     
-    withdrawals.push(newWithdrawal);
-    saveData();
+    const result = await withdrawalsCollection.insertOne(newWithdrawal);
+    newWithdrawal._id = result.insertedId;
     
     // Update user's total withdrawals
-    const userIndex = users.findIndex(user => user.userId === userId);
-    if (userIndex !== -1) {
-      users[userIndex].totalWithdrawals += parseFloat(amount);
-      saveData();
-    }
+    await usersCollection.updateOne(
+      { userId: userId },
+      { 
+        $inc: { 
+          totalWithdrawals: parseFloat(amount) 
+        } 
+      }
+    );
     
     return NextResponse.json({
       success: true,
@@ -112,30 +88,44 @@ export async function PUT(request) {
     const body = await request.json();
     const { withdrawalId, status, adminNotes, transactionHash } = body;
     
-    loadData();
+    if (!withdrawalId || !status) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields: withdrawalId, status' },
+        { status: 400 }
+      );
+    }
     
-    const withdrawalIndex = withdrawals.findIndex(withdrawal => withdrawal.id === withdrawalId);
-    if (withdrawalIndex === -1) {
+    const { db } = await connectToDatabase();
+    const collection = db.collection('withdrawals');
+    
+    const updateData = {
+      status: status,
+      processedDate: new Date(),
+      adminNotes: adminNotes || ''
+    };
+    
+    if (transactionHash) {
+      updateData.transactionHash = transactionHash;
+    }
+    
+    const result = await collection.updateOne(
+      { _id: withdrawalId },
+      { $set: updateData }
+    );
+    
+    if (result.matchedCount === 0) {
       return NextResponse.json(
         { success: false, error: 'Withdrawal not found' },
         { status: 404 }
       );
     }
     
-    // Update withdrawal
-    withdrawals[withdrawalIndex].status = status;
-    withdrawals[withdrawalIndex].processedDate = new Date().toISOString();
-    withdrawals[withdrawalIndex].adminNotes = adminNotes || '';
-    
-    if (transactionHash) {
-      withdrawals[withdrawalIndex].transactionHash = transactionHash;
-    }
-    
-    saveData();
+    // Get updated withdrawal
+    const updatedWithdrawal = await collection.findOne({ _id: withdrawalId });
     
     return NextResponse.json({
       success: true,
-      withdrawal: withdrawals[withdrawalIndex],
+      withdrawal: updatedWithdrawal,
       message: `Withdrawal ${status} successfully`
     });
   } catch (error) {

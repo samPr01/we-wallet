@@ -33,7 +33,7 @@ import {
   createDeposit, 
   createWithdrawal,
   createTransaction 
-} from '../lib/user-management';
+} from '../lib/api-user-management';
 
 export default function LandingPage() {
   const [walletAddress, setWalletAddress] = useState(null);

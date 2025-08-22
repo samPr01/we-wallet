@@ -9,9 +9,8 @@ import {
   approveWithdrawal, 
   rejectWithdrawal,
   updateUserActivity,
-  exportData,
-  clearAllData
-} from '../../lib/user-management';
+  exportData
+} from '../../lib/api-user-management';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -189,16 +188,7 @@ export default function AdminPage() {
   };
 
   const handleClearData = () => {
-    if (confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
-      try {
-        clearAllData();
-        loadAdminData();
-        alert('All data cleared successfully!');
-      } catch (error) {
-        console.error('Error clearing data:', error);
-        alert('Error clearing data');
-      }
-    }
+    alert('Data clearing is not available with MongoDB backend. Data is persistent and secure.');
   };
 
   const handleRefreshData = () => {
