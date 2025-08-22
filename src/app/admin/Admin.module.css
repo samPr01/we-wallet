@@ -122,9 +122,17 @@
   font-size: 1rem;
 }
 
+.headerRight {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.refreshButton,
+.exportButton,
+.clearButton,
 .logoutButton {
   padding: 0.75rem 1.5rem;
-  background: #dc3545;
   border: none;
   border-radius: 8px;
   color: #ffffff;
@@ -134,9 +142,85 @@
   transition: all 0.2s ease;
 }
 
-.logoutButton:hover {
+.refreshButton {
+  background: #17a2b8;
+}
+
+.refreshButton:hover {
+  background: #138496;
+  transform: translateY(-2px);
+}
+
+.refreshButton:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.exportButton {
+  background: #28a745;
+}
+
+.exportButton:hover {
+  background: #218838;
+  transform: translateY(-2px);
+}
+
+.clearButton {
+  background: #dc3545;
+}
+
+.clearButton:hover {
   background: #c82333;
   transform: translateY(-2px);
+}
+
+.logoutButton {
+  background: #6c757d;
+}
+
+.logoutButton:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+}
+
+/* Statistics Section */
+.statisticsSection {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
+  background: rgba(26, 26, 46, 0.95);
+  border-bottom: 1px solid #333333;
+}
+
+.statCard {
+  background: rgba(42, 42, 42, 0.8);
+  border: 1px solid #333333;
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.statCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  border-color: #667eea;
+}
+
+.statValue {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #667eea;
+  margin-bottom: 0.5rem;
+}
+
+.statLabel {
+  font-size: 0.9rem;
+  color: #cccccc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Navigation Tabs */
@@ -189,6 +273,42 @@
 .sectionHeader p {
   color: #cccccc;
   font-size: 1rem;
+}
+
+/* Admin Notes Section */
+.adminNotesSection {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: rgba(42, 42, 42, 0.8);
+  border: 1px solid #333333;
+  border-radius: 12px;
+}
+
+.adminNotesSection label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #cccccc;
+  margin-bottom: 0.5rem;
+}
+
+.adminNotesInput {
+  width: 100%;
+  padding: 0.75rem;
+  background: #2a2a2a;
+  border: 1px solid #333333;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: all 0.2s ease;
+}
+
+.adminNotesInput:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
 /* Table Styles */
@@ -261,7 +381,21 @@
   color: #6c757d;
 }
 
+.transferMethod {
+  font-size: 0.9rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
 .status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.statusBadge {
   padding: 0.25rem 0.75rem;
   border-radius: 20px;
   font-size: 0.8rem;
@@ -275,9 +409,34 @@
   border: 1px solid #ffc107;
 }
 
+.approved {
+  background: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+  border: 1px solid #28a745;
+}
+
+.rejected {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.active {
+  background: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+  border: 1px solid #28a745;
+}
+
 .actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+}
+
+.processedDate {
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-style: italic;
 }
 
 .viewButton,
@@ -310,6 +469,11 @@
   background: #218838;
 }
 
+.approveButton:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
 .rejectButton {
   background: #dc3545;
   color: #ffffff;
@@ -319,12 +483,28 @@
   background: #c82333;
 }
 
+.rejectButton:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
     gap: 1rem;
     text-align: center;
+  }
+
+  .headerRight {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .statisticsSection {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
   }
 
   .tabs {
@@ -339,6 +519,11 @@
   .depositsTable,
   .withdrawalsTable {
     min-width: 800px;
+  }
+
+  .actions {
+    flex-direction: column;
+    gap: 0.25rem;
   }
 }
 

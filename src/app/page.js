@@ -26,6 +26,14 @@ import {
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import QRCode from 'qrcode';
+import { 
+  createUser, 
+  getUserByAddress, 
+  updateUserActivity, 
+  createDeposit, 
+  createWithdrawal,
+  createTransaction 
+} from '../lib/user-management';
 
 export default function LandingPage() {
   const [walletAddress, setWalletAddress] = useState(null);
@@ -131,12 +139,23 @@ export default function LandingPage() {
     };
   }, []);
 
-  // Generate user ID when wallet address changes
+  // Generate user ID and create user when wallet address changes
   useEffect(() => {
     if (walletAddress && !userId) {
       const newUserId = generateUserIdFromAddress(walletAddress);
       setUserId(newUserId);
-      console.log('Generated User ID for wallet:', newUserId);
+      
+      // Create or get user in the system
+      const existingUser = getUserByAddress(walletAddress);
+      if (!existingUser) {
+        createUser(walletAddress, newUserId);
+        console.log('New user created:', newUserId);
+      } else {
+        console.log('Existing user found:', existingUser.userId);
+      }
+      
+      // Update user activity
+      updateUserActivity(walletAddress);
     }
   }, [walletAddress, userId]);
 
@@ -263,6 +282,18 @@ export default function LandingPage() {
       // Generate user ID when wallet connects
       const newUserId = generateUserIdFromAddress(address);
       setUserId(newUserId);
+      
+      // Create or get user in the system
+      const existingUser = getUserByAddress(address);
+      if (!existingUser) {
+        createUser(address, newUserId);
+        console.log('New user created:', newUserId);
+      } else {
+        console.log('Existing user found:', existingUser.userId);
+      }
+      
+      // Update user activity
+      updateUserActivity(address);
       console.log('Generated User ID:', newUserId);
     } catch (error) {
       console.error("Wallet connection failed:", error);
@@ -335,6 +366,9 @@ export default function LandingPage() {
         const receipt = await transaction.wait();
         
         alert(`ETH deposit successful! Transaction hash: ${transaction.hash}`);
+        
+        // Create transaction record
+        createTransaction(userId, walletAddress, 'ETH', 'deposit', depositAmount, transaction.hash);
         
         // Refresh ETH balance
         const provider = getProvider();
@@ -423,6 +457,9 @@ export default function LandingPage() {
           
           alert(`USDT deposit successful!\n\nAmount: ${depositAmount} USDT\nTransaction Hash: ${result.txHash}`);
           
+          // Create transaction record
+          createTransaction(userId, walletAddress, 'USDT', 'deposit', depositAmount, result.txHash);
+          
           // Refresh USDT balance
           const newBalance = await getUSDTBalance(walletAddress, provider);
           setBalances(prev => ({
@@ -463,6 +500,9 @@ export default function LandingPage() {
           const result = await transferUSDC(walletAddress, depositAddress, depositAmount, signer);
           
           alert(`USDC deposit successful!\n\nAmount: ${depositAmount} USDC\nTransaction Hash: ${result.txHash}`);
+          
+          // Create transaction record
+          createTransaction(userId, walletAddress, 'USDC', 'deposit', depositAmount, result.txHash);
           
           // Refresh USDC balance
           const newBalance = await getUSDCBalance(walletAddress, provider);
@@ -536,6 +576,9 @@ export default function LandingPage() {
         
         alert(`ETH withdrawal successful! Transaction hash: ${transaction.hash}`);
         
+        // Create transaction record
+        createTransaction(userId, walletAddress, 'ETH', 'withdrawal', withdrawAmount, transaction.hash);
+        
         // Refresh ETH balance
         const provider = getProvider();
         if (provider) {
@@ -599,6 +642,12 @@ export default function LandingPage() {
             
             alert(successMessage);
             
+                    // Create withdrawal record
+        createWithdrawal(userId, walletAddress, 'BTC', withdrawAmount, withdrawToAddress.trim(), transferMethod);
+        
+        // Create transaction record
+        createTransaction(userId, walletAddress, 'BTC', 'withdrawal', withdrawAmount, result.txHash || 'pending');
+            
             // Refresh BTC balance
             setTimeout(async () => {
               try {
@@ -661,6 +710,12 @@ export default function LandingPage() {
           
           alert(`USDT withdrawal successful!\n\nAmount: ${withdrawAmount} USDT\nTransaction Hash: ${result.txHash}`);
           
+                  // Create withdrawal record
+        createWithdrawal(userId, walletAddress, 'USDT', withdrawAmount, withdrawToAddress.trim(), 'server-side');
+        
+        // Create transaction record
+        createTransaction(userId, walletAddress, 'USDT', 'withdrawal', withdrawAmount, result.txHash);
+          
           // Refresh USDT balance
           const newBalance = await getUSDTBalance(walletAddress, provider);
           setBalances(prev => ({
@@ -711,6 +766,12 @@ export default function LandingPage() {
           const result = await transferUSDC(depositAddress, withdrawToAddress.trim(), withdrawAmount, signer);
           
           alert(`USDC withdrawal successful!\n\nAmount: ${withdrawAmount} USDC\nTransaction Hash: ${result.txHash}`);
+          
+                  // Create withdrawal record
+        createWithdrawal(userId, walletAddress, 'USDC', withdrawAmount, withdrawToAddress.trim(), 'server-side');
+        
+        // Create transaction record
+        createTransaction(userId, walletAddress, 'USDC', 'withdrawal', withdrawAmount, result.txHash);
           
           // Refresh USDC balance
           const newBalance = await getUSDCBalance(walletAddress, provider);
@@ -874,6 +935,10 @@ export default function LandingPage() {
       };
 
       console.log('Proof submitted:', proofData);
+      
+      // Create deposit record in the system
+      createDeposit(userId, walletAddress, selectedToken, depositAmount, transactionHash, transactionScreenshot);
+      
       alert('Proof submitted successfully! Admin will review your deposit.');
       
       setShowProofModal(false);
