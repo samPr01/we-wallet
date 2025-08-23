@@ -4,15 +4,32 @@ import styles from '../styles/AITrading.module.css';
 import { useState, useEffect } from 'react';
 import { useUser } from '../../contexts/UserContext';
 import Navigation from '../../components/Navigation';
+import { 
+  connectWallet, 
+  disconnectWallet, 
+  getProvider, 
+  getSigner 
+} from '../../lib/wallet';
+import { ethers } from 'ethers';
+import { 
+  fetchBTCBalance, 
+  isValidBTCAddress 
+} from '../../lib/bitcoin';
 
 export default function AITradingPage() {
-  const { userId, walletAddress } = useUser();
+  const { userId, walletAddress, updateUser, clearUser } = useUser();
   const [isConnecting, setIsConnecting] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [balances, setBalances] = useState({
     ETH: '0.0000',
     BTC: '0.00000000'
   });
+  const [usdBalances, setUsdBalances] = useState({
+    ETH: 0,
+    BTC: 0,
+    total: 0
+  });
+  const [lastPriceUpdate, setLastPriceUpdate] = useState(null);
   const [aiPredictions, setAiPredictions] = useState([]);
   const [tradingStrategies, setTradingStrategies] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,6 +140,22 @@ export default function AITradingPage() {
     fetchAIData();
   }, []);
 
+  // Calculate USD balances from token balances
+  const calculateUSDBalances = () => {
+    const ethPrice = 3248.19; // Current ETH price
+    const btcPrice = 121496.76; // Current BTC price
+    const ethValue = parseFloat(balances.ETH) * ethPrice;
+    const btcValue = parseFloat(balances.BTC) * btcPrice;
+    const total = ethValue + btcValue;
+    
+    setUsdBalances({
+      ETH: ethValue,
+      BTC: btcValue,
+      total: total
+    });
+    setLastPriceUpdate(new Date());
+  };
+
   // Fetch wallet balances when connected
   useEffect(() => {
     const fetchBalances = async () => {
@@ -157,13 +190,31 @@ export default function AITradingPage() {
     fetchBalances();
   }, [walletAddress]);
 
+  // Update USD balances when token balances change
+  useEffect(() => {
+    calculateUSDBalances();
+  }, [balances]);
+
+  // Update USD balances every 5 minutes to simulate price updates
+  useEffect(() => {
+    const priceInterval = setInterval(() => {
+      calculateUSDBalances();
+    }, 300000); // 5 minutes
+    
+    return () => clearInterval(priceInterval);
+  }, []);
+
   const handleConnect = async () => {
     if (isConnecting) return;
     
     setIsConnecting(true);
     try {
       const address = await connectWallet();
-      setWalletAddress(address);
+      if (address) {
+        // Generate a simple user ID for the AI trading page
+        const newUserId = `AI_${Date.now()}`;
+        updateUser(newUserId, address);
+      }
     } catch (error) {
       console.error("Wallet connection failed:", error);
       let errorMessage = error.message;
@@ -180,7 +231,7 @@ export default function AITradingPage() {
 
   const handleDisconnect = () => {
     disconnectWallet();
-    setWalletAddress(null);
+    clearUser();
     setBalances({
       ETH: '0.0000',
       BTC: '0.00000000'
@@ -188,6 +239,11 @@ export default function AITradingPage() {
   };
 
   const handleCreateStrategy = () => {
+    if (!walletAddress) {
+      alert('Please connect your wallet first.');
+      return;
+    }
+    
     if (!strategyConfig.name || !strategyConfig.investmentAmount) {
       alert('Please fill in all required fields.');
       return;
@@ -258,6 +314,88 @@ export default function AITradingPage() {
       {/* Navigation Component */}
       <Navigation />
 
+      {/* Wallet Connection Section */}
+      {!walletAddress ? (
+        <section className={styles.walletSection}>
+          <div className={styles.walletCard}>
+            <div className={styles.walletHeader}>
+              <h2>🔗 Connect Your Wallet</h2>
+              <p>Connect your Web3 wallet to access AI trading features</p>
+            </div>
+            <div className={styles.walletActions}>
+              <button 
+                className={styles.connectButton}
+                onClick={handleConnect}
+                disabled={isConnecting}
+              >
+                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+              </button>
+              <p className={styles.walletInfo}>
+                Don't have a wallet? <a href="https://metamask.io/download/" target="_blank" rel="noopener noreferrer">Download MetaMask</a>
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : (
+        // Wallet Information Section - Enhanced with stats and actions
+        <section className={styles.walletSection}>
+          <div className={styles.walletCard}>
+            <div className={styles.walletHeader}>
+              <span className={styles.walletStatus}>
+                {walletAddress ? (userId ? `User ID: ${userId}` : 'User ID: Loading...') : 'No Wallet Connected'}
+              </span>
+              <div className={styles.welcomeText}>
+                Welcome! {currentTime.toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })} at {currentTime.toLocaleTimeString('en-US', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}
+              </div>
+            </div>
+            
+            <div className={styles.walletBalance}>
+              <div className={styles.balanceHeader}>
+                <div className={styles.balanceLabel}>Portfolio Balance (USD)</div>
+              </div>
+              
+              <div className={styles.balanceDisplay}>
+                <div className={styles.totalUSD}>
+                  Total Portfolio Value: <span className={styles.totalUSDValue}>${usdBalances.total?.toFixed(2) || '0.00'}</span>
+                </div>
+                {lastPriceUpdate && (
+                  <div className={styles.priceUpdate}>
+                    Last updated: {new Date(lastPriceUpdate).toLocaleTimeString()}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.walletStats}>
+              <div className={styles.stat}>
+                <div className={styles.statValue}>
+                  <span className={styles.statPositive}>+$0.00</span>
+                  <span className={styles.statArrow}>↗</span>
+                </div>
+                <div className={styles.statLabel}>Today's P&L (USD)</div>
+              </div>
+              <div className={styles.stat}>
+                <div className={styles.statValue}>
+                  <span className={styles.statPositive}>+0.00%</span>
+                  <span className={styles.statArrow}>↗</span>
+                </div>
+                <div className={styles.statLabel}>ROI</div>
+                <div className={styles.statDate}>Today, {currentTime.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+      )}
+
       {/* AI Trading Overview */}
       <section className={styles.aiOverview}>
         <div className={styles.overviewCard}>
@@ -284,18 +422,19 @@ export default function AITradingPage() {
         </div>
       </section>
 
-      {/* AI Predictions */}
-      <section className={styles.predictionsSection}>
-        <div className={styles.sectionHeader}>
-          <h3>🎯 AI Market Predictions</h3>
-          <p>Real-time predictions based on advanced machine learning algorithms</p>
-        </div>
-        
-        {isLoading ? (
-          <div className={styles.loading}>Loading AI predictions...</div>
-        ) : (
-          <div className={styles.predictionsGrid}>
-            {aiPredictions.map((prediction) => (
+      {/* AI Predictions - Only show when wallet is connected */}
+      {walletAddress && (
+        <section className={styles.predictionsSection}>
+          <div className={styles.sectionHeader}>
+            <h3>🎯 AI Market Predictions</h3>
+            <p>Real-time predictions based on advanced machine learning algorithms</p>
+          </div>
+          
+          {isLoading ? (
+            <div className={styles.loading}>Loading AI predictions...</div>
+          ) : (
+            <div className={styles.predictionsGrid}>
+              {aiPredictions.map((prediction) => (
               <div key={prediction.id} className={styles.predictionCard}>
                 <div className={styles.predictionHeader}>
                   <div className={styles.cryptoInfo}>
@@ -343,21 +482,25 @@ export default function AITradingPage() {
             ))}
           </div>
         )}
-      </section>
+        </section>
+      )}
 
-      {/* Trading Strategies */}
-      <section className={styles.strategiesSection}>
-        <div className={styles.sectionHeader}>
-          <h3>📊 Trading Strategies</h3>
-          <div className={styles.strategyControls}>
-            <button 
-              className={styles.createStrategyButton}
-              onClick={() => setShowStrategyModal(true)}
-            >
-              + Create Strategy
-            </button>
+      {/* Trading Strategies - Only show when wallet is connected */}
+      {walletAddress && (
+        <section className={styles.strategiesSection}>
+          <div className={styles.sectionHeader}>
+            <h3>📊 Trading Strategies</h3>
+            <div className={styles.strategyControls}>
+                          {walletAddress && (
+              <button 
+                className={styles.createStrategyButton}
+                onClick={() => setShowStrategyModal(true)}
+              >
+                + Create Strategy
+              </button>
+            )}
+            </div>
           </div>
-        </div>
         
         <div className={styles.strategiesGrid}>
           {tradingStrategies.map((strategy) => (
@@ -407,10 +550,11 @@ export default function AITradingPage() {
             </div>
           ))}
         </div>
-      </section>
+        </section>
+      )}
 
-      {/* Strategy Creation Modal */}
-      {showStrategyModal && (
+      {/* Strategy Creation Modal - Only show when wallet is connected */}
+      {walletAddress && showStrategyModal && (
         <div className={styles.modalOverlay} onClick={() => setShowStrategyModal(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>

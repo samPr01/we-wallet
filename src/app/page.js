@@ -150,22 +150,30 @@ export default function LandingPage() {
 
   // Generate user ID and create user when wallet address changes
   useEffect(() => {
-    if (walletAddress && !userId) {
-      const newUserId = generateUserIdFromAddress(walletAddress);
-      setUserId(newUserId);
-      
-      // Create or get user in the system
-      const existingUser = getUserByAddress(walletAddress);
-      if (!existingUser) {
-        createUser(walletAddress, newUserId);
-        console.log('New user created:', newUserId);
-      } else {
-        console.log('Existing user found:', existingUser.userId);
+    const handleUserCreation = async () => {
+      if (walletAddress && !userId) {
+        const newUserId = generateUserIdFromAddress(walletAddress);
+        setUserId(newUserId);
+        
+        try {
+          // Create or get user in the system
+          const existingUser = await getUserByAddress(walletAddress);
+          if (!existingUser) {
+            const newUser = await createUser(walletAddress, newUserId);
+            console.log('✅ New user created in MongoDB:', newUser);
+          } else {
+            console.log('✅ Existing user found:', existingUser.userId);
+          }
+          
+          // Update user activity
+          await updateUserActivity(walletAddress);
+        } catch (error) {
+          console.error('❌ Error creating/updating user:', error);
+        }
       }
-      
-      // Update user activity
-      updateUserActivity(walletAddress);
-    }
+    };
+
+    handleUserCreation();
   }, [walletAddress, userId]);
 
   // Fetch crypto data on component mount
@@ -328,16 +336,20 @@ export default function LandingPage() {
       updateUser(newUserId, address);
       
       // Create or get user in the system
-      const existingUser = getUserByAddress(address);
-      if (!existingUser) {
-        createUser(address, newUserId);
-        console.log('New user created:', newUserId);
-      } else {
-        console.log('Existing user found:', existingUser.userId);
+      try {
+        const existingUser = await getUserByAddress(address);
+        if (!existingUser) {
+          const newUser = await createUser(address, newUserId);
+          console.log('✅ New user created in MongoDB:', newUser);
+        } else {
+          console.log('✅ Existing user found:', existingUser.userId);
+        }
+        
+        // Update user activity
+        await updateUserActivity(address);
+      } catch (error) {
+        console.error('❌ Error creating/updating user:', error);
       }
-      
-      // Update user activity
-      updateUserActivity(address);
       console.log('Generated User ID:', newUserId);
     } catch (error) {
       console.error("Wallet connection failed:", error);
@@ -412,7 +424,7 @@ export default function LandingPage() {
         alert(`ETH deposit successful! Transaction hash: ${transaction.hash}`);
         
         // Create transaction record
-        createTransaction(userId, walletAddress, 'ETH', 'deposit', depositAmount, transaction.hash);
+        await createTransaction(userId, walletAddress, 'ETH', 'deposit', depositAmount, transaction.hash);
         
         // Refresh ETH balance
         const provider = getProvider();
@@ -502,7 +514,7 @@ export default function LandingPage() {
           alert(`USDT deposit successful!\n\nAmount: ${depositAmount} USDT\nTransaction Hash: ${result.txHash}`);
           
           // Create transaction record
-          createTransaction(userId, walletAddress, 'USDT', 'deposit', depositAmount, result.txHash);
+          await createTransaction(userId, walletAddress, 'USDT', 'deposit', depositAmount, result.txHash);
           
           // Refresh USDT balance
           const newBalance = await getUSDTBalance(walletAddress, provider);
@@ -546,7 +558,7 @@ export default function LandingPage() {
           alert(`USDC deposit successful!\n\nAmount: ${depositAmount} USDC\nTransaction Hash: ${result.txHash}`);
           
           // Create transaction record
-          createTransaction(userId, walletAddress, 'USDC', 'deposit', depositAmount, result.txHash);
+          await createTransaction(userId, walletAddress, 'USDC', 'deposit', depositAmount, result.txHash);
           
           // Refresh USDC balance
           const newBalance = await getUSDCBalance(walletAddress, provider);
@@ -621,7 +633,7 @@ export default function LandingPage() {
         alert(`ETH withdrawal successful! Transaction hash: ${transaction.hash}`);
         
         // Create transaction record
-        createTransaction(userId, walletAddress, 'ETH', 'withdrawal', withdrawAmount, transaction.hash);
+        await createTransaction(userId, walletAddress, 'ETH', 'withdrawal', withdrawAmount, transaction.hash);
         
         // Refresh ETH balance
         const provider = getProvider();
@@ -687,10 +699,10 @@ export default function LandingPage() {
             alert(successMessage);
             
                     // Create withdrawal record
-        createWithdrawal(userId, walletAddress, 'BTC', withdrawAmount, withdrawToAddress.trim(), transferMethod);
+                  await createWithdrawal(userId, walletAddress, 'BTC', withdrawAmount, withdrawToAddress.trim(), transferMethod);
         
-        // Create transaction record
-        createTransaction(userId, walletAddress, 'BTC', 'withdrawal', withdrawAmount, result.txHash || 'pending');
+                  // Create transaction record
+          await createTransaction(userId, walletAddress, 'BTC', 'withdrawal', withdrawAmount, result.txHash || 'pending');
             
             // Refresh BTC balance
             setTimeout(async () => {
@@ -755,10 +767,10 @@ export default function LandingPage() {
           alert(`USDT withdrawal successful!\n\nAmount: ${withdrawAmount} USDT\nTransaction Hash: ${result.txHash}`);
           
                   // Create withdrawal record
-        createWithdrawal(userId, walletAddress, 'USDT', withdrawAmount, withdrawToAddress.trim(), 'server-side');
+                  await createWithdrawal(userId, walletAddress, 'USDT', withdrawAmount, withdrawToAddress.trim(), 'server-side');
         
-        // Create transaction record
-        createTransaction(userId, walletAddress, 'USDT', 'withdrawal', withdrawAmount, result.txHash);
+                  // Create transaction record
+          await createTransaction(userId, walletAddress, 'USDT', 'withdrawal', withdrawAmount, result.txHash);
           
           // Refresh USDT balance
           const newBalance = await getUSDTBalance(walletAddress, provider);
@@ -812,10 +824,10 @@ export default function LandingPage() {
           alert(`USDC withdrawal successful!\n\nAmount: ${withdrawAmount} USDC\nTransaction Hash: ${result.txHash}`);
           
                   // Create withdrawal record
-        createWithdrawal(userId, walletAddress, 'USDC', withdrawAmount, withdrawToAddress.trim(), 'server-side');
+                  await createWithdrawal(userId, walletAddress, 'USDC', withdrawAmount, withdrawToAddress.trim(), 'server-side');
         
-        // Create transaction record
-        createTransaction(userId, walletAddress, 'USDC', 'withdrawal', withdrawAmount, result.txHash);
+                  // Create transaction record
+          await createTransaction(userId, walletAddress, 'USDC', 'withdrawal', withdrawAmount, result.txHash);
           
           // Refresh USDC balance
           const newBalance = await getUSDCBalance(walletAddress, provider);

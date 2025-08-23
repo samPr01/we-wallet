@@ -80,15 +80,15 @@ export async function POST(request) {
   }
 }
 
-// PUT - Update user activity
+// PUT - Update user data (activity, USD balances, etc.)
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { walletAddress } = body;
+    const { walletAddress, userId, ...updateData } = body;
     
-    if (!walletAddress) {
+    if (!walletAddress && !userId) {
       return NextResponse.json(
-        { success: false, error: 'Missing walletAddress' },
+        { success: false, error: 'Missing required field: walletAddress or userId' },
         { status: 400 }
       );
     }
@@ -96,12 +96,26 @@ export async function PUT(request) {
     const { db } = await connectToDatabase();
     const collection = db.collection('users');
     
+    // Build query based on what's provided
+    let query = {};
+    if (walletAddress) {
+      query.walletAddress = walletAddress.toLowerCase();
+    } else if (userId) {
+      query.userId = userId;
+    }
+    
+    // Prepare update data
+    const updateFields = { ...updateData };
+    
+    // If no specific update data, default to updating lastActivity
+    if (Object.keys(updateFields).length === 0) {
+      updateFields.lastActivity = new Date();
+    }
+    
     const result = await collection.updateOne(
-      { walletAddress: walletAddress.toLowerCase() },
+      query,
       { 
-        $set: { 
-          lastActivity: new Date() 
-        } 
+        $set: updateFields
       }
     );
     
@@ -114,12 +128,12 @@ export async function PUT(request) {
     
     return NextResponse.json({
       success: true,
-      message: 'User activity updated successfully'
+      message: 'User updated successfully'
     });
   } catch (error) {
-    console.error('Error updating user activity:', error);
+    console.error('Error updating user:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update user activity' },
+      { success: false, error: 'Failed to update user' },
       { status: 500 }
     );
   }

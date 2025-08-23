@@ -48,13 +48,55 @@ export default function AdminPage() {
 
   const loadAdminData = async () => {
     try {
+      console.log('Loading admin data...');
       const data = await getEnhancedAdminDashboardData();
+      console.log('Admin data loaded successfully:', data);
+      console.log('Users sample:', data.users[0]);
+      console.log('Deposits sample:', data.deposits[0]);
+      console.log('Withdrawals sample:', data.withdrawals[0]);
       setUsers(data.users);
       setDeposits(data.deposits);
       setWithdrawals(data.withdrawals);
       setStatistics(data.statistics);
     } catch (error) {
-      console.error('Failed to load admin data:', error);
+      console.error('Failed to load admin data with enhanced functions:', error);
+      console.log('Falling back to basic data loading...');
+      
+      try {
+        // Fallback: try to load basic data without USD calculations
+        const response = await fetch('/api/users');
+        if (response.ok) {
+          const userData = await response.json();
+          const users = userData.users || [];
+          
+          // Set basic statistics
+          setUsers(users);
+          setDeposits([]);
+          setWithdrawals([]);
+          setStatistics({
+            totalUsers: users.length,
+            totalDeposits: 0,
+            totalWithdrawals: 0,
+            pendingDeposits: 0,
+            pendingWithdrawals: 0
+          });
+        } else {
+          throw new Error('Failed to fetch basic user data');
+        }
+      } catch (fallbackError) {
+        console.error('Fallback data loading also failed:', fallbackError);
+        // Set empty data to prevent UI from crashing
+        setUsers([]);
+        setDeposits([]);
+        setWithdrawals([]);
+        setStatistics({
+          totalUsers: 0,
+          totalDeposits: 0,
+          totalWithdrawals: 0,
+          pendingDeposits: 0,
+          pendingWithdrawals: 0
+        });
+      }
     }
   };
 
@@ -344,7 +386,7 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {users.map((user) => (
-                      <tr key={user.id} className={styles.tableRow}>
+                      <tr key={user._id || user.userId} className={styles.tableRow}>
                         <td className={styles.userId}>{user.userId}</td>
                         <td className={styles.walletAddress}>{user.walletAddress}</td>
                         <td className={styles.joinDate}>{formatDate(user.joinDate)}</td>
@@ -409,7 +451,7 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {deposits.map((deposit) => (
-                      <tr key={deposit.id} className={styles.tableRow}>
+                      <tr key={deposit._id || deposit.transactionHash} className={styles.tableRow}>
                         <td className={styles.userId}>{deposit.userId}</td>
                         <td className={styles.token}>{deposit.token}</td>
                         <td className={styles.amount}>{formatAmount(deposit.amount, deposit.token)}</td>
@@ -427,14 +469,14 @@ export default function AdminPage() {
                             <>
                               <button 
                                 className={styles.approveButton}
-                                onClick={() => handleApproveDeposit(deposit.id)}
+                                onClick={() => handleApproveDeposit(deposit._id)}
                                 disabled={loading}
                               >
                                 Approve
                               </button>
                               <button 
                                 className={styles.rejectButton}
-                                onClick={() => handleRejectDeposit(deposit.id)}
+                                onClick={() => handleRejectDeposit(deposit._id)}
                                 disabled={loading}
                               >
                                 Reject
@@ -498,7 +540,7 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {withdrawals.map((withdrawal) => (
-                      <tr key={withdrawal.id} className={styles.tableRow}>
+                      <tr key={withdrawal._id || withdrawal.destinationAddress} className={styles.tableRow}>
                         <td className={styles.userId}>{withdrawal.userId}</td>
                         <td className={styles.token}>{withdrawal.token}</td>
                         <td className={styles.amount}>{formatAmount(withdrawal.amount, withdrawal.token)}</td>
@@ -516,14 +558,14 @@ export default function AdminPage() {
                             <>
                               <button 
                                 className={styles.approveButton}
-                                onClick={() => handleApproveWithdrawal(withdrawal.id)}
+                                onClick={() => handleApproveWithdrawal(withdrawal._id)}
                                 disabled={loading}
                               >
                                 Approve
                               </button>
                               <button 
                                 className={styles.rejectButton}
-                                onClick={() => handleRejectWithdrawal(withdrawal.id)}
+                                onClick={() => handleRejectWithdrawal(withdrawal._id)}
                                 disabled={loading}
                               >
                                 Reject

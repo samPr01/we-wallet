@@ -1,13 +1,16 @@
+// Environment variables are loaded automatically by Next.js
+// No need to manually load dotenv
+
 // Receiving Addresses for Deposits
 export const RECEIVING_ADDRESSES = {
-  BTC: process.env.NEXT_PUBLIC_BTC_ADDRESS,
-  USDT: process.env.NEXT_PUBLIC_USDT_ADDRESS,
-  ETH: process.env.NEXT_PUBLIC_ETH_ADDRESS,
+  BTC: process.env.NEXT_PUBLIC_BTC_DEPOSIT_ADDRESS,
+  USDT: process.env.NEXT_PUBLIC_USDT_DEPOSIT_ADDRESS,
+  ETH: process.env.NEXT_PUBLIC_ETH_DEPOSIT_ADDRESS,
 };
 
 // WalletConnect Configuration
 export const WALLETCONNECT_CONFIG = {
-  PROJECT_ID: process.env.PROJECT_ID
+  PROJECT_ID: process.env.NEXT_PUBLIC_PROJECT_ID
 };
 
 // Token Contract Addresses

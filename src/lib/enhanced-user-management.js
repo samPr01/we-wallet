@@ -99,9 +99,23 @@ export const getAllUsers = async () => {
   try {
     const users = await getAllUsersBase();
     
-    // Update USD balances for all users
+    // Only update USD balances for users that don't have them or haven't been updated recently
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    
     for (const user of users) {
-      await updateUserUSDBalances(user.userId);
+      try {
+        // Skip if user already has recent USD balance data
+        if (user.lastPriceUpdate && new Date(user.lastPriceUpdate) > oneHourAgo && user.currentBalanceUSD !== undefined) {
+          continue;
+        }
+        
+        // Update USD balances only when necessary
+        await updateUserUSDBalances(user.userId);
+      } catch (updateError) {
+        console.warn(`Failed to update USD balances for user ${user.userId}:`, updateError);
+        // Continue with other users instead of failing completely
+      }
     }
     
     // Return updated users
@@ -254,11 +268,14 @@ export const updateUserUSDBalances = async (userId) => {
   try {
     // Get current user data
     const user = await getUserByIdBase(userId);
-    if (!user) return;
+    if (!user) {
+      console.warn(`User not found for USD balance update: ${userId}`);
+      return;
+    }
     
-    // Get current token balances (you'll need to implement this based on your system)
+    // Get current token balances from user data or default to 0
     const tokenBalances = {
-      BTC: user.btcBalance || 0,
+      BTC: user.btcBalance || user.totalDeposits || 0,
       ETH: user.ethBalance || 0,
       USDT: user.usdtBalance || 0,
       USDC: user.usdcBalance || 0
@@ -276,6 +293,7 @@ export const updateUserUSDBalances = async (userId) => {
     return usdBalances;
   } catch (error) {
     console.error('Failed to update user USD balances:', error);
+    // Don't throw error to prevent admin panel from crashing
   }
 };
 
@@ -294,13 +312,15 @@ const updateUserInDatabase = async (userId, updateData) => {
     });
     
     if (!response.ok) {
-      throw new Error('Failed to update user');
+      const errorText = await response.text();
+      throw new Error(`Failed to update user: ${response.status} - ${errorText}`);
     }
     
     return await response.json();
   } catch (error) {
     console.error('Failed to update user in database:', error);
-    throw error;
+    // Don't throw error to prevent admin panel from crashing
+    return null;
   }
 };
 

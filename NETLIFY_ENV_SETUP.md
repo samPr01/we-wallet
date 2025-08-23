@@ -7,6 +7,7 @@ Set these environment variables in your Netlify dashboard under **Site settings 
 ### Core Configuration
 ```
 NEXT_PUBLIC_PROJECT_ID=07b02acd712d354bbeacc0d5ef0642f7
+MONGO_URI=your_mongodb_connection_string_here
 ```
 
 ### Deposit Addresses
@@ -71,8 +72,24 @@ You can test if environment variables are loaded by:
 2. Looking for debug logs starting with `[WeWallet Debug]`
 3. Checking if all required variables are present
 
+## MongoDB Setup
+
+### For Local Development:
+1. **Install MongoDB locally** or use MongoDB Atlas (cloud)
+2. **Create a `.env.local` file** in your project root with:
+   ```
+   MONGO_URI=mongodb://localhost:27017/walletbase
+   ```
+3. **Start MongoDB service** if running locally
+
+### For Production (Netlify):
+1. **Use MongoDB Atlas** (recommended) or your own MongoDB instance
+2. **Set the MONGO_URI** in Netlify environment variables
+3. **Format**: `mongodb+srv://username:password@cluster.mongodb.net/walletbase`
+
 ## Security Notes
 
 - All variables starting with `NEXT_PUBLIC_` are exposed to the client
+- **MONGO_URI contains sensitive credentials** - never expose it to the client
 - Never include private keys or sensitive data in these variables
 - The deposit addresses are public and safe to expose
