@@ -450,10 +450,5 @@ export const getAllWithdrawals = async () => {
   }
 };
 
-// Re-export the base functions that the admin panel needs
-export { 
-  approveDepositBase as approveDeposit,
-  rejectDepositBase as rejectDeposit,
-  approveWithdrawalBase as approveWithdrawal,
-  rejectWithdrawalBase as rejectWithdrawal
-};
+// Note: Functions are directly exported above
+// approveDeposit, rejectDeposit, approveWithdrawal, rejectWithdrawal

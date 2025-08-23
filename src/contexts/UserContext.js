@@ -25,7 +25,27 @@ export const UserProvider = ({ children }) => {
       setUserId(savedUserId);
     }
     if (savedWalletAddress) {
-      setWalletAddress(savedWalletAddress);
+      // Validate the saved wallet address before setting it
+      try {
+        if (savedWalletAddress.startsWith('0x') && savedWalletAddress.length === 42) {
+          // Try to get the proper checksum format
+          const { ethers } = require('ethers');
+          const checksumAddress = ethers.getAddress(savedWalletAddress);
+          setWalletAddress(checksumAddress);
+          // Update localStorage with corrected address
+          localStorage.setItem('walletbase_walletAddress', checksumAddress);
+        } else {
+          console.warn('Invalid wallet address format in localStorage:', savedWalletAddress);
+          // Clear invalid address
+          localStorage.removeItem('walletbase_walletAddress');
+          localStorage.removeItem('walletbase_userId');
+        }
+      } catch (error) {
+        console.warn('Failed to validate saved wallet address:', error);
+        // Clear invalid address
+        localStorage.removeItem('walletbase_walletAddress');
+        localStorage.removeItem('walletbase_userId');
+      }
     }
   }, []);
 
@@ -40,8 +60,24 @@ export const UserProvider = ({ children }) => {
   }, [userId, walletAddress]);
 
   const updateUser = (newUserId, newWalletAddress) => {
-    setUserId(newUserId);
-    setWalletAddress(newWalletAddress);
+    // Validate wallet address before setting
+    if (newWalletAddress) {
+      try {
+        const { ethers } = require('ethers');
+        if (ethers.isAddress(newWalletAddress)) {
+          const checksumAddress = ethers.getAddress(newWalletAddress);
+          setUserId(newUserId);
+          setWalletAddress(checksumAddress);
+        } else {
+          console.error('Invalid wallet address provided to updateUser:', newWalletAddress);
+        }
+      } catch (error) {
+        console.error('Failed to validate wallet address in updateUser:', error);
+      }
+    } else {
+      setUserId(newUserId);
+      setWalletAddress('');
+    }
   };
 
   const clearUser = () => {

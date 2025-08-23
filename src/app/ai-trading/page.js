@@ -161,6 +161,12 @@ export default function AITradingPage() {
     const fetchBalances = async () => {
       if (walletAddress) {
         try {
+          // Validate wallet address first
+          if (!ethers.isAddress(walletAddress)) {
+            console.error('Invalid wallet address in AI trading:', walletAddress);
+            return;
+          }
+          
           const provider = getProvider();
           if (provider) {
             const ethBalance = await provider.getBalance(walletAddress);

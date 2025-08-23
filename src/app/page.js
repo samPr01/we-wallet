@@ -264,6 +264,12 @@ export default function LandingPage() {
         try {
           const provider = getProvider();
           if (provider) {
+            // Validate wallet address first
+            if (!ethers.isAddress(walletAddress)) {
+              console.error('Invalid wallet address:', walletAddress);
+              return;
+            }
+            
             // Fetch ETH balance
             const ethBalance = await provider.getBalance(walletAddress);
             const ethBalanceFormatted = ethers.formatEther(ethBalance);
@@ -285,13 +291,23 @@ export default function LandingPage() {
             let usdcBalance = '0.00';
             
             try {
-              usdtBalance = (await getUSDTBalance(walletAddress, provider)).toFixed(2);
+              // Validate address before calling getUSDTBalance
+              if (ethers.isAddress(walletAddress)) {
+                usdtBalance = (await getUSDTBalance(walletAddress, provider)).toFixed(2);
+              } else {
+                console.warn('Invalid wallet address for USDT balance:', walletAddress);
+              }
             } catch (error) {
               console.warn('Error fetching USDT balance:', error);
             }
             
             try {
-              usdcBalance = (await getUSDCBalance(walletAddress, provider)).toFixed(2);
+              // Validate address before calling getUSDCBalance
+              if (ethers.isAddress(walletAddress)) {
+                usdcBalance = (await getUSDCBalance(walletAddress, provider)).toFixed(2);
+              } else {
+                console.warn('Invalid wallet address for USDC balance:', walletAddress);
+              }
             } catch (error) {
               console.warn('Error fetching USDC balance:', error);
             }
