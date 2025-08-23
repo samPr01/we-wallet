@@ -1,85 +1,18 @@
 'use client';
 
-import styles from '../styles/Market.module.css';
-import { connectWallet, disconnectWallet, getProvider, getSigner, detectWallets, WALLET_TYPES, restoreWalletFromCookies, setupWalletListeners, removeWalletListeners } from '../../lib/wallet';
-import { RECEIVING_ADDRESSES } from '../../lib/config';
-import { fetchBTCBalance, getBTCAddressInfo, isValidBTCAddress } from '../../lib/bitcoin';
 import { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
+import Navigation from '../../components/Navigation';
+import { useUser } from '../../contexts/UserContext';
+import styles from './Market.module.css';
 
 export default function MarketPage() {
-  const [walletAddress, setWalletAddress] = useState(null);
+  const { userId, walletAddress } = useUser();
   const [cryptoData, setCryptoData] = useState([]);
-  const [isConnecting, setIsConnecting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [wishlist, setWishlist] = useState([]);
+  const [showWishlistModal, setShowWishlistModal] = useState(false);
   const [selectedCrypto, setSelectedCrypto] = useState(null);
-  const [showTradeModal, setShowTradeModal] = useState(false);
-  const [tradeAmount, setTradeAmount] = useState('');
-  const [tradeType, setTradeType] = useState('buy'); // 'buy' or 'sell'
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [balances, setBalances] = useState({
-    ETH: '0.0000',
-    BTC: '0.00000000'
-  });
-  const [marketStats, setMarketStats] = useState({
-    totalMarketCap: 0,
-    totalVolume: 0,
-    btcDominance: 0,
-    ethDominance: 0
-  });
-  const [availableWallets, setAvailableWallets] = useState([]);
-  const [showWalletModal, setShowWalletModal] = useState(false);
-
-  // Update time every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Detect available wallets and load wallet data from cookies on component mount
-  useEffect(() => {
-    const initializeWallet = async () => {
-      // Detect available wallets
-      const wallets = detectWallets();
-      setAvailableWallets(wallets);
-      
-      // Set up wallet listeners
-      setupWalletListeners(
-        (newAddress) => {
-          console.log('Account changed:', newAddress);
-          setWalletAddress(newAddress);
-        },
-        (chainId) => {
-          console.log('Chain changed:', chainId);
-        },
-        () => {
-          console.log('Wallet disconnected');
-          setWalletAddress(null);
-        }
-      );
-      
-      // Restore wallet connection from cookies
-      try {
-        const restoredAddress = await restoreWalletFromCookies();
-        if (restoredAddress) {
-          setWalletAddress(restoredAddress);
-          console.log('Restored wallet from cookies:', restoredAddress);
-        }
-      } catch (error) {
-        console.log('Wallet restoration failed:', error.message);
-      }
-    };
-    
-    initializeWallet();
-    
-    // Cleanup wallet listeners on unmount
-    return () => {
-      removeWalletListeners();
-    };
-  }, []);
+  const [wishlistNote, setWishlistNote] = useState('');
 
   // Fetch crypto data on component mount
   useEffect(() => {
@@ -108,19 +41,6 @@ export default function MarketPage() {
         }));
         
         setCryptoData(formattedData);
-        
-        // Calculate market stats
-        const totalMarketCap = data.reduce((sum, coin) => sum + coin.market_cap, 0);
-        const totalVolume = data.reduce((sum, coin) => sum + coin.total_volume, 0);
-        const btcData = data.find(coin => coin.symbol === 'btc');
-        const ethData = data.find(coin => coin.symbol === 'eth');
-        
-        setMarketStats({
-          totalMarketCap,
-          totalVolume,
-          btcDominance: btcData ? (btcData.market_cap / totalMarketCap) * 100 : 0,
-          ethDominance: ethData ? (ethData.market_cap / totalMarketCap) * 100 : 0
-        });
       } catch (error) {
         console.error('Failed to fetch crypto data:', error);
       } finally {
@@ -131,124 +51,88 @@ export default function MarketPage() {
     fetchCryptoData();
   }, []);
 
-  // Fetch wallet balances when connected
+  // Load wishlist from backend API
   useEffect(() => {
-    const fetchBalances = async () => {
-      if (walletAddress) {
-        try {
-          const provider = getProvider();
-          if (provider) {
-            const ethBalance = await provider.getBalance(walletAddress);
-            const ethBalanceFormatted = ethers.formatEther(ethBalance);
-            
-            let btcBalance = '0.00000000';
-            try {
-              if (isValidBTCAddress(walletAddress)) {
-                const btcBalanceValue = await fetchBTCBalance(walletAddress);
-                btcBalance = btcBalanceValue.toFixed(8);
-              }
-            } catch (btcError) {
-              console.warn('Error fetching BTC balance:', btcError);
-            }
-            
-            setBalances({
-              ETH: parseFloat(ethBalanceFormatted).toFixed(4),
-              BTC: btcBalance
-            });
-          }
-        } catch (error) {
-          console.error('Failed to fetch balances:', error);
+    const fetchWishlist = async () => {
+      if (!userId) return;
+      
+      try {
+        const response = await fetch(`/api/wishlist?userId=${userId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setWishlist(data.wishlist || []);
         }
+      } catch (error) {
+        console.error('Failed to fetch wishlist:', error);
       }
     };
 
-    fetchBalances();
-  }, [walletAddress]);
+    fetchWishlist();
+  }, [userId]);
 
-  const handleConnect = async (walletType = WALLET_TYPES.METAMASK) => {
-    if (isConnecting) return;
-    
-    setIsConnecting(true);
-    setShowWalletModal(false);
-    
+  const addToWishlist = async (crypto) => {
+    if (!userId) {
+      alert('Please connect your wallet to add items to wishlist');
+      return;
+    }
+
     try {
-      const address = await connectWallet(walletType);
-      
-      // If address is null, user cancelled the connection
-      if (address === null) {
-        console.log('User cancelled wallet connection');
-        setIsConnecting(false); // Reset connecting state
-        return; // Just return without showing error or changing state
+      const response = await fetch('/api/wishlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          cryptoData: crypto,
+          note: wishlistNote
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setWishlist(data.wishlist);
+        setWishlistNote('');
+        setShowWishlistModal(false);
+        setSelectedCrypto(null);
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to add to wishlist');
       }
-      
-      setWalletAddress(address);
     } catch (error) {
-      console.error("Wallet connection failed:", error);
-      let errorMessage = error.message;
-      
-      // Handle specific wallet connection errors
-      if (error.message.includes('not installed')) {
-        errorMessage = 'Please install the wallet extension first.';
-      } else if (error.message.includes('User rejected') || 
-                 error.message.includes('cancelled by user') ||
-                 error.message.includes('Connection was cancelled')) {
-        errorMessage = 'Connection was cancelled. Please try again and approve the connection.';
-      } else if (error.message.includes('WalletConnect connection failed')) {
-        errorMessage = 'WalletConnect connection failed. Please try again or use an injected wallet.';
-      } else if (error.message.includes('No Web3 wallet detected')) {
-        errorMessage = 'No Web3 wallet detected. Please install MetaMask or another wallet extension.';
-      } else if (error.message.includes('No accounts found')) {
-        errorMessage = 'No accounts found. Please unlock your wallet and try again.';
-      }
-      
-      alert(errorMessage);
-    } finally {
-      setIsConnecting(false);
+      console.error('Error adding to wishlist:', error);
+      alert('Failed to add to wishlist. Please try again.');
     }
   };
 
-  const handleDisconnect = () => {
-    disconnectWallet();
-    setWalletAddress(null);
-    setBalances({
-      ETH: '0.0000',
-      BTC: '0.00000000'
-    });
+  const removeFromWishlist = async (cryptoId) => {
+    try {
+      const response = await fetch('/api/wishlist', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          cryptoId
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setWishlist(data.wishlist);
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to remove from wishlist');
+      }
+    } catch (error) {
+      console.error('Error removing from wishlist:', error);
+      alert('Failed to remove from wishlist. Please try again.');
+    }
   };
 
-  const handleTrade = async () => {
-    if (!walletAddress) {
-      alert('Please connect your wallet first.');
-      return;
-    }
-
-    if (!selectedCrypto) {
-      alert('Please select a cryptocurrency to trade.');
-      return;
-    }
-
-    if (!tradeAmount || parseFloat(tradeAmount) <= 0) {
-      alert('Please enter a valid amount.');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      // Simulate trade processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const action = tradeType === 'buy' ? 'purchased' : 'sold';
-      alert(`Successfully ${action} ${tradeAmount} ${selectedCrypto.symbol} at $${selectedCrypto.price.toFixed(2)}`);
-      
-      setShowTradeModal(false);
-      setTradeAmount('');
-      setSelectedCrypto(null);
-    } catch (error) {
-      console.error('Trade failed:', error);
-      alert(`Trade failed: ${error.message}`);
-    } finally {
-      setIsProcessing(false);
-    }
+  const isInWishlist = (cryptoId) => {
+    return wishlist.some(item => item.id === cryptoId);
   };
 
   const formatVolume = (volume) => {
@@ -270,6 +154,13 @@ export default function MarketPage() {
     return `${sign}${change.toFixed(2)}%`;
   };
 
+  const formatPriceChangeAmount = (amount) => {
+    if (Math.abs(amount) >= 1e9) return `$${(amount / 1e9).toFixed(1)}B`;
+    if (Math.abs(amount) >= 1e6) return `$${(amount / 1e6).toFixed(1)}M`;
+    if (Math.abs(amount) >= 1e3) return `$${(amount / 1e3).toFixed(1)}K`;
+    return `$${Math.abs(amount).toFixed(2)}`;
+  };
+
   const formatMarketCap = (marketCap) => {
     if (marketCap >= 1e12) return `$${(marketCap / 1e12).toFixed(2)}T`;
     if (marketCap >= 1e9) return `$${(marketCap / 1e9).toFixed(2)}B`;
@@ -277,389 +168,205 @@ export default function MarketPage() {
     return `$${marketCap.toFixed(0)}`;
   };
 
-  const getReceivingAddress = (token) => {
-    switch (token) {
-      case 'BTC': return RECEIVING_ADDRESSES.BTC;
-      case 'USDT': return RECEIVING_ADDRESSES.USDT;
-      case 'ETH': 
-      case 'USDC': return RECEIVING_ADDRESSES.ETH;
-      default: return RECEIVING_ADDRESSES.ETH;
-    }
-  };
-
-  const copyToClipboard = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      alert('Address copied to clipboard!');
-    } catch (err) {
-      console.error('Failed to copy: ', err);
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      alert('Address copied to clipboard!');
-    }
-  };
-
-  // Wallet Gate - Show only connection screen if no wallet is connected
-  if (!walletAddress) {
-    return (
-      <main className={styles.container}>
-        <div className={styles.walletGate}>
-          <div className={styles.walletGateContent}>
-            <div className={styles.walletGateLogo}>
-              <div className={styles.logo}>WalletBase</div>
-            </div>
-            
-            <div className={styles.walletGateTitle}>
-              <h1>Welcome to WalletBase</h1>
-              <p>Connect your wallet to access the decentralized trading platform</p>
-            </div>
-
-            <div className={styles.walletGateFeatures}>
-              <div className={styles.featureItem}>
-                <div className={styles.featureIcon}>🔐</div>
-                <div className={styles.featureText}>
-                  <h3>Secure Wallet Connection</h3>
-                  <p>Connect with MetaMask for secure, decentralized access</p>
-                </div>
-              </div>
-              
-              <div className={styles.featureItem}>
-                <div className={styles.featureIcon}>📊</div>
-                <div className={styles.featureText}>
-                  <h3>Live Market Data</h3>
-                  <p>Real-time cryptocurrency prices and market analysis</p>
-                </div>
-              </div>
-              
-              <div className={styles.featureItem}>
-                <div className={styles.featureIcon}>🤖</div>
-                <div className={styles.featureText}>
-                  <h3>AI Trading</h3>
-                  <p>Intelligent trading strategies powered by AI</p>
-                </div>
-              </div>
-              
-              <div className={styles.featureItem}>
-                <div className={styles.featureIcon}>💎</div>
-                <div className={styles.featureText}>
-                  <h3>Multi-Chain Support</h3>
-                  <p>Trade ETH, BTC, and other cryptocurrencies</p>
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.walletGateConnect}>
-              <button 
-                onClick={() => setShowWalletModal(true)}
-                className={styles.walletGateButton}
-                disabled={isConnecting}
-              >
-                {isConnecting ? (
-                  <>
-                    <div className={styles.spinner}></div>
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <span className={styles.walletIcon}>🔗</span>
-                    Connect Wallet
-                  </>
-                )}
-              </button>
-              
-              <div className={styles.walletGateInfo}>
-                <p>Don't have a wallet? <a href="https://metamask.io/download/" target="_blank" rel="noopener noreferrer">Download MetaMask</a></p>
-                <p>By connecting, you agree to our Terms of Service and Privacy Policy</p>
-              </div>
-            </div>
+  return (
+    <main className={styles.container}>
+      <Navigation />
+      
+      <div className={styles.content}>
+        <div className={styles.pageHeader}>
+          <h1>Market Analysis</h1>
+          <div className={styles.headerActions}>
+            <button 
+              className={styles.refreshButton}
+              onClick={() => window.location.reload()}
+              disabled={isLoading}
+            >
+              🔄 Refresh
+            </button>
+            <button 
+              className={styles.wishlistButton}
+              onClick={() => setShowWishlistModal(true)}
+            >
+              📋 Wishlist ({wishlist.length})
+            </button>
           </div>
         </div>
 
-        {/* Wallet Selection Modal */}
-        {showWalletModal && (
-          <div className={styles.modalOverlay} onClick={() => setShowWalletModal(false)}>
-            <div className={styles.walletModal} onClick={(e) => e.stopPropagation()}>
+        {/* Crypto Market List */}
+        <section className={styles.marketSection}>
+          <div className={styles.marketHeader}>
+            <h2>Cryptocurrency Market</h2>
+            <p>Real-time prices and market data for top cryptocurrencies</p>
+          </div>
+
+          {isLoading ? (
+            <div className={styles.loading}>Loading market data...</div>
+          ) : (
+            <div className={styles.cryptoList}>
+              {cryptoData.map((coin) => (
+                <div key={coin.id} className={styles.cryptoListItem}>
+                  <div className={styles.cryptoListHeader}>
+                    <div className={styles.cryptoListLeft}>
+                      <img src={coin.image} alt={coin.name} className={styles.cryptoIcon} />
+                      <div className={styles.cryptoListInfo}>
+                        <div className={styles.cryptoSymbol}>{coin.symbol}</div>
+                        <div className={styles.cryptoName}>{coin.name}</div>
+                      </div>
+                    </div>
+                    <div className={styles.cryptoListCenter}>
+                      <div className={styles.cryptoPrice}>
+                        ${formatPrice(coin.price)}
+                      </div>
+                      <div className={styles.cryptoChange}>
+                        <span className={coin.priceChange >= 0 ? styles.positive : styles.negative}>
+                          {formatPriceChange(coin.priceChange)} {formatPriceChangeAmount(coin.priceChangeAmount)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={styles.cryptoListRight}>
+                      <div className={styles.cryptoVolume}>
+                        Volume: {formatVolume(coin.volume)}
+                      </div>
+                      <div className={styles.cryptoTrend}>
+                        <span className={coin.priceChange >= 0 ? styles.bull : styles.bear}>
+                          {coin.priceChange >= 0 ? '↗ BULL' : '↘ BEAR'}
+                        </span>
+                      </div>
+                      <div className={styles.cryptoActions}>
+                        <button 
+                          className={styles.tradeButton}
+                          onClick={() => {
+                            setSelectedCrypto(coin);
+                            setShowWishlistModal(true);
+                          }}
+                        >
+                          Trade {coin.symbol}
+                        </button>
+                        <button 
+                          className={`${styles.wishlistToggle} ${isInWishlist(coin.id) ? styles.inWishlist : ''}`}
+                          onClick={() => {
+                            if (isInWishlist(coin.id)) {
+                              removeFromWishlist(coin.id);
+                            } else {
+                              setSelectedCrypto(coin);
+                              setShowWishlistModal(true);
+                            }
+                          }}
+                        >
+                          {isInWishlist(coin.id) ? '❤️' : '🤍'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Wishlist Modal */}
+        {showWishlistModal && selectedCrypto && (
+          <div className={styles.modalOverlay} onClick={() => setShowWishlistModal(false)}>
+            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
               <div className={styles.modalHeader}>
-                <h3>Choose Your Wallet</h3>
+                <h3>Add to Wishlist</h3>
                 <button 
                   className={styles.modalClose}
-                  onClick={() => setShowWalletModal(false)}
+                  onClick={() => setShowWishlistModal(false)}
                 >
                   ×
                 </button>
               </div>
               <div className={styles.modalBody}>
-                <div className={styles.walletGrid}>
-                  {availableWallets.map((wallet) => (
-                    <button
-                      key={wallet.type}
-                      className={styles.walletOption}
-                      onClick={() => handleConnect(wallet.type)}
-                      disabled={isConnecting}
-                    >
-                      <div className={styles.walletIcon}>{wallet.icon}</div>
-                      <div className={styles.walletInfo}>
-                        <div className={styles.walletName}>{wallet.name}</div>
-                        <div className={styles.walletDescription}>{wallet.description}</div>
-                      </div>
-                      {wallet.isInstalled && (
-                        <div className={styles.installedBadge}>Installed</div>
-                      )}
-                    </button>
-                  ))}
+                <div className={styles.cryptoInfo}>
+                  <img src={selectedCrypto.image} alt={selectedCrypto.name} className={styles.modalCryptoIcon} />
+                  <div>
+                    <div className={styles.modalCryptoName}>{selectedCrypto.name}</div>
+                    <div className={styles.modalCryptoPrice}>${formatPrice(selectedCrypto.price)}</div>
+                    <div className={`${styles.modalCryptoChange} ${selectedCrypto.priceChange >= 0 ? styles.positive : styles.negative}`}>
+                      {formatPriceChange(selectedCrypto.priceChange)}
+                    </div>
+                  </div>
                 </div>
                 
-                {availableWallets.length === 0 && (
-                  <div className={styles.noWallets}>
-                    <p>No Web3 wallets detected</p>
-                    <p>Please install a wallet extension to continue</p>
-                    <a 
-                      href="https://metamask.io/download/" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className={styles.installLink}
-                    >
-                      Install MetaMask
-                    </a>
+                <div className={styles.inputGroup}>
+                  <label>Note (optional)</label>
+                  <textarea
+                    value={wishlistNote}
+                    onChange={(e) => setWishlistNote(e.target.value)}
+                    placeholder="Add a note about this cryptocurrency..."
+                    className={styles.modalTextarea}
+                    rows="3"
+                  />
+                </div>
+              </div>
+              <div className={styles.modalFooter}>
+                <button 
+                  className={styles.modalButtonSecondary}
+                  onClick={() => setShowWishlistModal(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className={styles.modalButtonPrimary}
+                  onClick={() => addToWishlist(selectedCrypto)}
+                >
+                  Add to Wishlist
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Wishlist Display Modal */}
+        {showWishlistModal && !selectedCrypto && (
+          <div className={styles.modalOverlay} onClick={() => setShowWishlistModal(false)}>
+            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.modalHeader}>
+                <h3>My Wishlist</h3>
+                <button 
+                  className={styles.modalClose}
+                  onClick={() => setShowWishlistModal(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className={styles.modalBody}>
+                {wishlist.length === 0 ? (
+                  <div className={styles.emptyWishlist}>
+                    <p>Your wishlist is empty</p>
+                    <p>Add cryptocurrencies to track their prices and trends</p>
+                  </div>
+                ) : (
+                  <div className={styles.wishlistItems}>
+                    {wishlist.map((item) => (
+                      <div key={item.id} className={styles.wishlistItem}>
+                        <div className={styles.wishlistItemLeft}>
+                          <img src={item.image} alt={item.name} className={styles.wishlistIcon} />
+                          <div>
+                            <div className={styles.wishlistSymbol}>{item.symbol}</div>
+                            <div className={styles.wishlistName}>{item.name}</div>
+                            {item.note && <div className={styles.wishlistNote}>{item.note}</div>}
+                          </div>
+                        </div>
+                        <div className={styles.wishlistItemRight}>
+                          <div className={styles.wishlistPrice}>${formatPrice(item.price)}</div>
+                          <button 
+                            className={styles.removeWishlistButton}
+                            onClick={() => removeFromWishlist(item.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
           </div>
         )}
-      </main>
-    );
-  }
-
-
-
-  // Main application content - only shown when wallet is connected
-  return (
-    <main className={styles.container}>
-      {/* Header Navigation */}
-      <header className={styles.header}>
-        <div className={styles.navLeft}>
-          <div className={styles.logo}>WalletBase</div>
-          <nav className={styles.nav}>
-            <a href="/" className={styles.navLink}>Home</a>
-            <a href="/market" className={styles.navActive}>Market</a>
-            <a href="/orders" className={styles.navLink}>Orders</a>
-            <a href="/ai-trading" className={styles.navLink}>$ Intelligent AI Trading</a>
-            <a href="/settings" className={styles.navLink}>Settings</a>
-          </nav>
-        </div>
-        <div className={styles.navRight}>
-          {walletAddress ? (
-            <div className={styles.walletInfo}>
-              <span className={styles.address}>
-                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-              </span>
-              <button onClick={handleDisconnect} className={styles.disconnectButton}>
-                Disconnect
-              </button>
-            </div>
-          ) : (
-            <button 
-              onClick={handleConnect} 
-              className={styles.connectButton}
-              disabled={isConnecting}
-            >
-              {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* Market Overview */}
-      <section className={styles.marketOverview}>
-        <div className={styles.overviewCard}>
-          <h2>Market Overview</h2>
-          <div className={styles.statsGrid}>
-            <div className={styles.statItem}>
-              <span className={styles.statLabel}>Total Market Cap</span>
-              <span className={styles.statValue}>{formatMarketCap(marketStats.totalMarketCap)}</span>
-            </div>
-            <div className={styles.statItem}>
-              <span className={styles.statLabel}>24h Volume</span>
-              <span className={styles.statValue}>{formatVolume(marketStats.totalVolume)}</span>
-            </div>
-            <div className={styles.statItem}>
-              <span className={styles.statLabel}>BTC Dominance</span>
-              <span className={styles.statValue}>{marketStats.btcDominance.toFixed(2)}%</span>
-            </div>
-            <div className={styles.statItem}>
-              <span className={styles.statLabel}>ETH Dominance</span>
-              <span className={styles.statValue}>{marketStats.ethDominance.toFixed(2)}%</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Market Table */}
-      <section className={styles.marketTable}>
-        <div className={styles.tableHeader}>
-          <h2>Cryptocurrency Market</h2>
-          <div className={styles.tableControls}>
-            <input 
-              type="text" 
-              placeholder="Search cryptocurrencies..." 
-              className={styles.searchInput}
-            />
-            <select className={styles.sortSelect}>
-              <option value="market_cap">Market Cap</option>
-              <option value="volume">Volume</option>
-              <option value="price">Price</option>
-              <option value="change">24h Change</option>
-            </select>
-          </div>
-        </div>
-
-        {isLoading ? (
-          <div className={styles.loading}>Loading market data...</div>
-        ) : (
-          <div className={styles.tableContainer}>
-            <table className={styles.marketTable}>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Name</th>
-                  <th>Price</th>
-                  <th>24h Change</th>
-                  <th>Market Cap</th>
-                  <th>Volume (24h)</th>
-                  <th>Circulating Supply</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cryptoData.map((coin, index) => (
-                  <tr key={coin.id} className={styles.tableRow}>
-                    <td>{index + 1}</td>
-                    <td className={styles.coinInfo}>
-                      <img src={coin.image} alt={coin.name} className={styles.coinIcon} />
-                      <div>
-                        <div className={styles.coinName}>{coin.name}</div>
-                        <div className={styles.coinSymbol}>{coin.symbol}</div>
-                      </div>
-                    </td>
-                    <td className={styles.price}>${formatPrice(coin.price)}</td>
-                    <td className={`${styles.change} ${coin.priceChange >= 0 ? styles.positive : styles.negative}`}>
-                      {formatPriceChange(coin.priceChange)}
-                    </td>
-                    <td>{formatMarketCap(coin.marketCap)}</td>
-                    <td>{formatVolume(coin.volume)}</td>
-                    <td>{coin.symbol}</td>
-                    <td>
-                      <button 
-                        className={styles.tradeButton}
-                        onClick={() => {
-                          setSelectedCrypto(coin);
-                          setShowTradeModal(true);
-                        }}
-                      >
-                        Trade
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* Trade Modal */}
-      {showTradeModal && selectedCrypto && (
-        <div className={styles.modalOverlay} onClick={() => !isProcessing && setShowTradeModal(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h3>Trade {selectedCrypto.symbol}</h3>
-              <button 
-                className={styles.modalClose}
-                onClick={() => setShowTradeModal(false)}
-                disabled={isProcessing}
-              >
-                ×
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <div className={styles.cryptoInfo}>
-                <img src={selectedCrypto.image} alt={selectedCrypto.name} className={styles.modalCryptoIcon} />
-                <div>
-                  <div className={styles.modalCryptoName}>{selectedCrypto.name}</div>
-                  <div className={styles.modalCryptoPrice}>${formatPrice(selectedCrypto.price)}</div>
-                  <div className={`${styles.modalCryptoChange} ${selectedCrypto.priceChange >= 0 ? styles.positive : styles.negative}`}>
-                    {formatPriceChange(selectedCrypto.priceChange)}
-                  </div>
-                </div>
-              </div>
-              
-              <div className={styles.tradeTypeSelector}>
-                <button 
-                  className={`${styles.tradeTypeButton} ${tradeType === 'buy' ? styles.active : ''}`}
-                  onClick={() => setTradeType('buy')}
-                  disabled={isProcessing}
-                >
-                  Buy
-                </button>
-                <button 
-                  className={`${styles.tradeTypeButton} ${tradeType === 'sell' ? styles.active : ''}`}
-                  onClick={() => setTradeType('sell')}
-                  disabled={isProcessing}
-                >
-                  Sell
-                </button>
-              </div>
-
-              <div className={styles.inputGroup}>
-                <label>Amount ({selectedCrypto.symbol})</label>
-                <input
-                  type="number"
-                  value={tradeAmount}
-                  onChange={(e) => setTradeAmount(e.target.value)}
-                  placeholder="0.0"
-                  min="0"
-                  step="0.000001"
-                  disabled={isProcessing}
-                  className={styles.modalInput}
-                />
-              </div>
-
-              <div className={styles.tradeSummary}>
-                <div className={styles.summaryItem}>
-                  <span>Price:</span>
-                  <span>${formatPrice(selectedCrypto.price)}</span>
-                </div>
-                <div className={styles.summaryItem}>
-                  <span>Total Value:</span>
-                  <span>${tradeAmount ? (parseFloat(tradeAmount) * selectedCrypto.price).toFixed(2) : '0.00'}</span>
-                </div>
-              </div>
-            </div>
-            <div className={styles.modalFooter}>
-              <button 
-                className={styles.modalButtonSecondary}
-                onClick={() => setShowTradeModal(false)}
-                disabled={isProcessing}
-              >
-                Cancel
-              </button>
-              <button 
-                className={`${styles.modalButtonPrimary} ${tradeType === 'buy' ? styles.buyButton : styles.sellButton}`}
-                onClick={handleTrade}
-                disabled={isProcessing || !tradeAmount || parseFloat(tradeAmount) <= 0}
-              >
-                {isProcessing ? 'Processing...' : `${tradeType === 'buy' ? 'Buy' : 'Sell'} ${selectedCrypto.symbol}`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </main>
   );
 }

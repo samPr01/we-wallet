@@ -51,7 +51,7 @@ export const isValidBitcoinAddress = (address) => {
     
     // Check for valid Bitcoin address prefixes
     const validPrefixes = ['1', '3', 'bc1'];
-    const hasValidPrefix = validPrefixes.some(prefix => trimmedAddress.startsWith(prefix));
+    const hasValidPrefix = validPrefixes.some(prefix => trimmedAddress && typeof trimmedAddress === 'string' && trimmedAddress.startsWith(prefix));
     
     if (!hasValidPrefix) {
       console.log('Invalid address: no valid prefix found', trimmedAddress);
@@ -69,7 +69,7 @@ export const isValidBitcoinAddress = (address) => {
     // P2SH addresses: 3 + 25-34 alphanumeric characters (excluding 0, O, I, l)
     // Bech32 addresses: bc1 + 39-59 alphanumeric characters (lowercase)
     
-    if (trimmedAddress.startsWith('1') || trimmedAddress.startsWith('3')) {
+    if (trimmedAddress && typeof trimmedAddress === 'string' && (trimmedAddress.startsWith('1') || trimmedAddress.startsWith('3'))) {
       // Legacy and P2SH addresses
       const legacyPattern = /^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/;
       const isValid = legacyPattern.test(trimmedAddress);
@@ -77,7 +77,7 @@ export const isValidBitcoinAddress = (address) => {
         console.log('Invalid legacy/P2SH address format', trimmedAddress);
       }
       return isValid;
-    } else if (trimmedAddress.startsWith('bc1')) {
+    } else if (trimmedAddress && typeof trimmedAddress === 'string' && trimmedAddress.startsWith('bc1')) {
       // Bech32 addresses
       const bech32Pattern = /^bc1[a-z0-9]{39,59}$/;
       const isValid = bech32Pattern.test(trimmedAddress);
@@ -161,7 +161,7 @@ export const isValidBitcoinAddressLenient = (address) => {
     
     // Just check for valid prefixes and reasonable length
     const validPrefixes = ['1', '3', 'bc1'];
-    const hasValidPrefix = validPrefixes.some(prefix => trimmedAddress.startsWith(prefix));
+    const hasValidPrefix = validPrefixes.some(prefix => trimmedAddress && typeof trimmedAddress === 'string' && trimmedAddress.startsWith(prefix));
     
     if (!hasValidPrefix) {
       return false;

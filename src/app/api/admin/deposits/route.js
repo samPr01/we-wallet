@@ -40,12 +40,33 @@ export async function POST(request) {
     const depositsCollection = db.collection('deposits');
     const usersCollection = db.collection('users');
     
-    // Create new deposit
+    // Get current token price in USD
+    let usdAmount = 0;
+    try {
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${getTokenId(token)}&vs_currencies=usd`
+      );
+      if (response.ok) {
+        const priceData = await response.json();
+        const tokenPrice = priceData[getTokenId(token)]?.usd;
+        if (tokenPrice) {
+          usdAmount = parseFloat(amount) * tokenPrice;
+        }
+      }
+    } catch (priceError) {
+      console.warn('Failed to get token price, using fallback:', priceError);
+      // Fallback prices
+      const fallbackPrices = { BTC: 50000, ETH: 3000, USDT: 1, USDC: 1 };
+      usdAmount = parseFloat(amount) * (fallbackPrices[token] || 0);
+    }
+    
+    // Create new deposit with USD value
     const newDeposit = {
       userId: userId,
       walletAddress: walletAddress.toLowerCase(),
       token: token,
       amount: parseFloat(amount),
+      usdAmount: usdAmount,
       transactionHash: transactionHash || '',
       screenshot: screenshot || null,
       status: 'pending',
@@ -57,12 +78,13 @@ export async function POST(request) {
     const result = await depositsCollection.insertOne(newDeposit);
     newDeposit._id = result.insertedId;
     
-    // Update user's total deposits
+    // Update user's total deposits (both token and USD)
     await usersCollection.updateOne(
       { userId: userId },
       { 
         $inc: { 
-          totalDeposits: parseFloat(amount) 
+          totalDeposits: parseFloat(amount),
+          totalDepositsUSD: usdAmount
         } 
       }
     );
@@ -81,6 +103,17 @@ export async function POST(request) {
   }
 }
 
+// Helper function to get CoinGecko token ID
+function getTokenId(token) {
+  const tokenMap = {
+    'BTC': 'bitcoin',
+    'ETH': 'ethereum',
+    'USDT': 'tether',
+    'USDC': 'usd-coin'
+  };
+  return tokenMap[token] || 'bitcoin';
+}
+
 // PUT - Update deposit status
 export async function PUT(request) {
   try {
@@ -96,6 +129,16 @@ export async function PUT(request) {
     
     const { db } = await connectToDatabase();
     const collection = db.collection('deposits');
+    const usersCollection = db.collection('users');
+    
+    // Get the deposit first to access user info
+    const deposit = await collection.findOne({ _id: depositId });
+    if (!deposit) {
+      return NextResponse.json(
+        { success: false, error: 'Deposit not found' },
+        { status: 404 }
+      );
+    }
     
     const updateData = {
       status: status,
@@ -116,6 +159,40 @@ export async function PUT(request) {
       return NextResponse.json(
         { success: false, error: 'Deposit not found' },
         { status: 404 }
+      );
+    }
+    
+    // If deposit is approved, update user's current balance
+    if (status === 'approved') {
+      // Get current token price for accurate USD calculation
+      let currentUsdAmount = deposit.usdAmount;
+      try {
+        const response = await fetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${getTokenId(deposit.token)}&vs_currencies=usd`
+        );
+        if (response.ok) {
+          const priceData = await response.json();
+          const tokenPrice = priceData[getTokenId(deposit.token)]?.usd;
+          if (tokenPrice) {
+            currentUsdAmount = parseFloat(deposit.amount) * tokenPrice;
+          }
+        }
+      } catch (priceError) {
+        console.warn('Failed to get current token price, using stored USD amount:', priceError);
+      }
+      
+      // Update user's current balance and USD balance
+      await usersCollection.updateOne(
+        { userId: deposit.userId },
+        { 
+          $inc: { 
+            [`${deposit.token.toLowerCase()}Balance`]: parseFloat(deposit.amount),
+            currentBalanceUSD: currentUsdAmount
+          },
+          $set: {
+            lastPriceUpdate: new Date().toISOString()
+          }
+        }
       );
     }
     

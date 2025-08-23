@@ -1,13 +1,12 @@
 'use client';
 
 import styles from '../styles/Settings.module.css';
-import { connectWallet, disconnectWallet, getProvider, getSigner, restoreWalletFromCookies, setupWalletListeners, removeWalletListeners } from '../../lib/wallet';
-import { fetchBTCBalance, getBTCAddressInfo, isValidBTCAddress } from '../../lib/bitcoin';
 import { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
+import { useUser } from '../../contexts/UserContext';
+import Navigation from '../../components/Navigation';
 
 export default function SettingsPage() {
-  const [walletAddress, setWalletAddress] = useState(null);
+  const { userId, walletAddress } = useUser();
   const [isConnecting, setIsConnecting] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [balances, setBalances] = useState({
@@ -46,81 +45,18 @@ export default function SettingsPage() {
     }
   });
 
-  // Update time every second and initialize wallet
+  // Update time every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     
-    // Set up wallet listeners
-    setupWalletListeners(
-      (newAddress) => {
-        console.log('Account changed:', newAddress);
-        setWalletAddress(newAddress);
-      },
-      (chainId) => {
-        console.log('Chain changed:', chainId);
-      },
-      () => {
-        console.log('Wallet disconnected');
-        setWalletAddress(null);
-      }
-    );
-    
-    // Restore wallet connection from cookies
-    const restoreWallet = async () => {
-      try {
-        const restoredAddress = await restoreWalletFromCookies();
-        if (restoredAddress) {
-          setWalletAddress(restoredAddress);
-          console.log('Restored wallet from cookies:', restoredAddress);
-        }
-      } catch (error) {
-        console.log('Wallet restoration failed:', error.message);
-      }
-    };
-    
-    restoreWallet();
-    
     return () => {
       clearInterval(timer);
-      removeWalletListeners();
     };
   }, []);
 
-  // Fetch wallet balances when connected
-  useEffect(() => {
-    const fetchBalances = async () => {
-      if (walletAddress) {
-        try {
-          const provider = getProvider();
-          if (provider) {
-            const ethBalance = await provider.getBalance(walletAddress);
-            const ethBalanceFormatted = ethers.formatEther(ethBalance);
-            
-            let btcBalance = '0.00000000';
-            try {
-              if (isValidBTCAddress(walletAddress)) {
-                const btcBalanceValue = await fetchBTCBalance(walletAddress);
-                btcBalance = btcBalanceValue.toFixed(8);
-              }
-            } catch (btcError) {
-              console.warn('Error fetching BTC balance:', btcError);
-            }
-            
-            setBalances({
-              ETH: parseFloat(ethBalanceFormatted).toFixed(4),
-              BTC: btcBalance
-            });
-          }
-        } catch (error) {
-          console.error('Failed to fetch balances:', error);
-        }
-      }
-    };
-
-    fetchBalances();
-  }, [walletAddress]);
+  // Remove balance fetching - not needed for settings page
 
   const handleConnect = async () => {
     if (isConnecting) return;
@@ -223,39 +159,8 @@ export default function SettingsPage() {
 
   return (
     <main className={styles.container}>
-      {/* Header Navigation */}
-      <header className={styles.header}>
-        <div className={styles.navLeft}>
-          <div className={styles.logo}>WalletBase</div>
-          <nav className={styles.nav}>
-            <a href="/" className={styles.navLink}>Home</a>
-            <a href="/market" className={styles.navLink}>Market</a>
-            <a href="/orders" className={styles.navLink}>Orders</a>
-            <a href="/ai-trading" className={styles.navLink}>$ Intelligent AI Trading</a>
-            <a href="/settings" className={styles.navActive}>Settings</a>
-          </nav>
-        </div>
-        <div className={styles.navRight}>
-          {walletAddress ? (
-            <div className={styles.walletInfo}>
-              <span className={styles.address}>
-                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-              </span>
-              <button onClick={handleDisconnect} className={styles.disconnectButton}>
-                Disconnect
-              </button>
-            </div>
-          ) : (
-            <button 
-              onClick={handleConnect} 
-              className={styles.connectButton}
-              disabled={isConnecting}
-            >
-              {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-            </button>
-          )}
-        </div>
-      </header>
+      {/* Navigation Component */}
+      <Navigation />
 
       {/* Settings Content */}
       <div className={styles.settingsContainer}>

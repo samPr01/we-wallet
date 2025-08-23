@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import styles from './Admin.module.css';
+import Navigation from '../../components/Navigation';
 import { 
-  getAdminDashboardData, 
+  getEnhancedAdminDashboardData, 
   approveDeposit, 
   rejectDeposit, 
   approveWithdrawal, 
   rejectWithdrawal,
   updateUserActivity,
   exportData
-} from '../../lib/api-user-management';
+} from '../../lib/enhanced-user-management';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -45,9 +46,9 @@ export default function AdminPage() {
     }
   }, [isAuthenticated]);
 
-  const loadAdminData = () => {
+  const loadAdminData = async () => {
     try {
-      const data = getAdminDashboardData();
+      const data = await getEnhancedAdminDashboardData();
       setUsers(data.users);
       setDeposits(data.deposits);
       setWithdrawals(data.withdrawals);
@@ -95,7 +96,7 @@ export default function AdminPage() {
   const handleApproveDeposit = async (depositId) => {
     setLoading(true);
     try {
-      const result = approveDeposit(depositId, adminNotes);
+      const result = await approveDeposit(depositId, adminNotes);
       if (result) {
         alert('Deposit approved successfully!');
         loadAdminData(); // Refresh data
@@ -114,7 +115,7 @@ export default function AdminPage() {
   const handleRejectDeposit = async (depositId) => {
     setLoading(true);
     try {
-      const result = rejectDeposit(depositId, adminNotes);
+      const result = await rejectDeposit(depositId, adminNotes);
       if (result) {
         alert('Deposit rejected successfully!');
         loadAdminData(); // Refresh data
@@ -133,7 +134,7 @@ export default function AdminPage() {
   const handleApproveWithdrawal = async (withdrawalId) => {
     setLoading(true);
     try {
-      const result = approveWithdrawal(withdrawalId, null, adminNotes);
+      const result = await approveWithdrawal(withdrawalId, null, adminNotes);
       if (result) {
         alert('Withdrawal approved successfully!');
         loadAdminData(); // Refresh data
@@ -152,7 +153,7 @@ export default function AdminPage() {
   const handleRejectWithdrawal = async (withdrawalId) => {
     setLoading(true);
     try {
-      const result = rejectWithdrawal(withdrawalId, adminNotes);
+      const result = await rejectWithdrawal(withdrawalId, adminNotes);
       if (result) {
         alert('Withdrawal rejected successfully!');
         loadAdminData(); // Refresh data
@@ -168,9 +169,9 @@ export default function AdminPage() {
     }
   };
 
-  const handleExportData = () => {
+  const handleExportData = async () => {
     try {
-      const data = exportData();
+      const data = await exportData();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -230,6 +231,8 @@ export default function AdminPage() {
   // Admin dashboard
   return (
     <main className={styles.container}>
+      {/* Navigation Component */}
+      <Navigation />
       {/* Header */}
       <header className={styles.header}>
         <div className={styles.headerLeft}>
@@ -263,24 +266,28 @@ export default function AdminPage() {
       {/* Statistics Overview */}
       <section className={styles.statisticsSection}>
         <div className={styles.statCard}>
-          <div className={styles.statValue}>{statistics.totalUsers}</div>
+          <div className={styles.statValue}>{statistics?.totalUsers ?? 0}</div>
           <div className={styles.statLabel}>Total Users</div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statValue}>{formatAmount(statistics.totalDeposits, 'USD')}</div>
-          <div className={styles.statLabel}>Total Deposits</div>
+          <div className={styles.statValue}>${(statistics?.totalDepositsUSD ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className={styles.statLabel}>Total Deposits (USD)</div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statValue}>{formatAmount(statistics.totalWithdrawals, 'USD')}</div>
-          <div className={styles.statLabel}>Total Withdrawals</div>
+          <div className={styles.statValue}>${(statistics?.totalWithdrawalsUSD ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className={styles.statLabel}>Total Withdrawals (USD)</div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statValue}>{statistics.pendingDeposits}</div>
+          <div className={styles.statValue}>{statistics?.pendingDeposits ?? 0}</div>
           <div className={styles.statLabel}>Pending Deposits</div>
         </div>
         <div className={styles.statCard}>
-          <div className={styles.statValue}>{statistics.pendingWithdrawals}</div>
+          <div className={styles.statValue}>{statistics?.pendingWithdrawals ?? 0}</div>
           <div className={styles.statLabel}>Pending Withdrawals</div>
+        </div>
+        <div className={styles.statCard}>
+          <div className={styles.statValue}>${(statistics?.totalCurrentBalanceUSD ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div className={styles.statLabel}>Total Current Balance (USD)</div>
         </div>
       </section>
 
@@ -290,19 +297,19 @@ export default function AdminPage() {
           className={`${styles.tab} ${activeTab === 'users' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('users')}
         >
-          👥 Users ({users.length})
+          👥 Users ({users?.length ?? 0})
         </button>
         <button 
           className={`${styles.tab} ${activeTab === 'deposits' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('deposits')}
         >
-          📥 Deposits ({deposits.length})
+          📥 Deposits ({deposits?.length ?? 0})
         </button>
         <button 
           className={`${styles.tab} ${activeTab === 'withdrawals' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('withdrawals')}
         >
-          📤 Withdrawals ({withdrawals.length})
+          📤 Withdrawals ({withdrawals?.length ?? 0})
         </button>
       </nav>
 
@@ -312,10 +319,10 @@ export default function AdminPage() {
           <section className={styles.usersSection}>
             <div className={styles.sectionHeader}>
               <h2>Registered Users</h2>
-              <p>Total users: {users.length}</p>
+              <p>Total users: {users?.length ?? 0}</p>
             </div>
             <div className={styles.tableContainer}>
-              {users.length === 0 ? (
+              {!users || users.length === 0 ? (
                 <div className={styles.emptyState}>
                   <div className={styles.emptyIcon}>👥</div>
                   <h3>No Users Registered</h3>
@@ -328,8 +335,9 @@ export default function AdminPage() {
                       <th>User ID</th>
                       <th>Wallet Address</th>
                       <th>Join Date</th>
-                      <th>Total Deposits</th>
-                      <th>Total Withdrawals</th>
+                      <th>Total Deposits (USD)</th>
+                      <th>Total Withdrawals (USD)</th>
+                      <th>Current Balance (USD)</th>
                       <th>Last Activity</th>
                       <th>Status</th>
                     </tr>
@@ -340,8 +348,9 @@ export default function AdminPage() {
                         <td className={styles.userId}>{user.userId}</td>
                         <td className={styles.walletAddress}>{user.walletAddress}</td>
                         <td className={styles.joinDate}>{formatDate(user.joinDate)}</td>
-                        <td className={styles.deposits}>{formatAmount(user.totalDeposits, 'USD')}</td>
-                        <td className={styles.withdrawals}>{formatAmount(user.totalWithdrawals, 'USD')}</td>
+                        <td className={styles.deposits}>${(user.totalDepositsUSD ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className={styles.withdrawals}>${(user.totalWithdrawalsUSD ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className={styles.currentBalance}>${(user.currentBalanceUSD ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className={styles.lastActivity}>{formatDate(user.lastActivity)}</td>
                         <td className={styles.status}>
                           <span className={`${styles.statusBadge} ${styles.active}`}>
@@ -390,6 +399,7 @@ export default function AdminPage() {
                       <th>User ID</th>
                       <th>Token</th>
                       <th>Amount</th>
+                      <th>USD Value</th>
                       <th>Transaction Hash</th>
                       <th>Wallet Address</th>
                       <th>Submission Date</th>
@@ -403,6 +413,7 @@ export default function AdminPage() {
                         <td className={styles.userId}>{deposit.userId}</td>
                         <td className={styles.token}>{deposit.token}</td>
                         <td className={styles.amount}>{formatAmount(deposit.amount, deposit.token)}</td>
+                        <td className={styles.usdValue}>${(deposit.usdAmount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className={styles.txHash}>{deposit.transactionHash}</td>
                         <td className={styles.walletAddress}>{deposit.walletAddress}</td>
                         <td className={styles.date}>{formatDate(deposit.submissionDate)}</td>
@@ -477,6 +488,7 @@ export default function AdminPage() {
                       <th>User ID</th>
                       <th>Token</th>
                       <th>Amount</th>
+                      <th>USD Value</th>
                       <th>Destination Address</th>
                       <th>Transfer Method</th>
                       <th>Request Date</th>
@@ -490,6 +502,7 @@ export default function AdminPage() {
                         <td className={styles.userId}>{withdrawal.userId}</td>
                         <td className={styles.token}>{withdrawal.token}</td>
                         <td className={styles.amount}>{formatAmount(withdrawal.amount, withdrawal.token)}</td>
+                        <td className={styles.usdValue}>${(withdrawal.usdAmount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className={styles.walletAddress}>{withdrawal.destinationAddress}</td>
                         <td className={styles.transferMethod}>{withdrawal.transferMethod}</td>
                         <td className={styles.date}>{formatDate(withdrawal.requestDate)}</td>

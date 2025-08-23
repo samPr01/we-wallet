@@ -33,10 +33,12 @@ import {
   createDeposit, 
   createWithdrawal,
   createTransaction 
-} from '../lib/api-user-management';
+} from '../lib/enhanced-user-management';
+import { useUser } from '../contexts/UserContext';
+import Navigation from '../components/Navigation';
 
 export default function LandingPage() {
-  const [walletAddress, setWalletAddress] = useState(null);
+  const { userId, walletAddress, updateUser, clearUser } = useUser();
   const [cryptoData, setCryptoData] = useState([]);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,13 +55,21 @@ export default function LandingPage() {
     USDT: '0.00',
     USDC: '0.00'
   });
+  const [usdBalances, setUsdBalances] = useState({
+    ETH: 0,
+    BTC: 0,
+    USDT: 0,
+    USDC: 0,
+    total: 0
+  });
+  const [prices, setPrices] = useState({});
+  const [lastPriceUpdate, setLastPriceUpdate] = useState(null);
   const [availableWallets, setAvailableWallets] = useState([]);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [showProofModal, setShowProofModal] = useState(false);
   const [transactionHash, setTransactionHash] = useState('');
   const [transactionScreenshot, setTransactionScreenshot] = useState(null);
-  const [userId, setUserId] = useState('');
   const [withdrawToAddress, setWithdrawToAddress] = useState('');
   const [transferMethod, setTransferMethod] = useState('server-side');
   const [availableTransferMethods, setAvailableTransferMethods] = useState([]);
@@ -104,14 +114,14 @@ export default function LandingPage() {
       setupWalletListeners(
         (newAddress) => {
           console.log('Account changed:', newAddress);
-          setWalletAddress(newAddress);
+          updateUser(userId, newAddress);
         },
         (chainId) => {
           console.log('Chain changed:', chainId);
         },
         () => {
           console.log('Wallet disconnected');
-          setWalletAddress(null);
+          clearUser();
         }
       );
       
@@ -119,10 +129,9 @@ export default function LandingPage() {
       try {
         const restoredAddress = await restoreWalletFromCookies();
         if (restoredAddress) {
-          setWalletAddress(restoredAddress);
           // Generate user ID for restored wallet
           const newUserId = generateUserIdFromAddress(restoredAddress);
-          setUserId(newUserId);
+          updateUser(newUserId, restoredAddress);
           console.log('Restored wallet from cookies:', restoredAddress);
           console.log('Generated User ID for restored wallet:', newUserId);
         }
@@ -204,6 +213,42 @@ export default function LandingPage() {
     fetchCryptoData();
   }, []);
 
+  // Fetch and update prices for USD conversion
+  const fetchAndUpdatePrices = async () => {
+    try {
+      const response = await fetch('/api/prices');
+      const data = await response.json();
+      
+      if (data.success) {
+        setPrices(data.prices);
+        setLastPriceUpdate(data.timestamp);
+        
+        // Calculate USD balances
+        const newUsdBalances = {};
+        let totalUSD = 0;
+        
+        Object.keys(balances).forEach(token => {
+          if (data.prices[token]) {
+            const usdValue = parseFloat(balances[token]) * data.prices[token].usd;
+            newUsdBalances[token] = usdValue;
+            totalUSD += usdValue;
+          }
+        });
+        
+        newUsdBalances.total = totalUSD;
+        setUsdBalances(newUsdBalances);
+      }
+    } catch (error) {
+      console.error('Failed to fetch prices:', error);
+    }
+  };
+
+  // Update prices every 5 minutes
+  useEffect(() => {
+    const priceInterval = setInterval(fetchAndUpdatePrices, 300000); // 5 minutes
+    return () => clearInterval(priceInterval);
+  }, [balances]);
+
   // Fetch wallet balances when connected
   useEffect(() => {
     const fetchBalances = async () => {
@@ -278,10 +323,9 @@ export default function LandingPage() {
         return; // Just return without showing error or changing state
       }
       
-      setWalletAddress(address);
       // Generate user ID when wallet connects
       const newUserId = generateUserIdFromAddress(address);
-      setUserId(newUserId);
+      updateUser(newUserId, address);
       
       // Create or get user in the system
       const existingUser = getUserByAddress(address);
@@ -328,7 +372,7 @@ export default function LandingPage() {
 
   const handleDisconnect = () => {
     disconnectWallet();
-    setWalletAddress(null);
+    clearUser();
     setBalances({
       ETH: '0.0000',
       BTC: '0.00000000'
@@ -560,7 +604,7 @@ export default function LandingPage() {
         }
         
         // Basic Ethereum address validation
-        if (!withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
+        if (!withdrawToAddress || typeof withdrawToAddress !== 'string' || !withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
           throw new Error('Please enter a valid Ethereum address (0x...)');
         }
 
@@ -700,7 +744,7 @@ export default function LandingPage() {
           }
           
           // Basic Ethereum address validation for USDT
-          if (!withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
+          if (!withdrawToAddress || typeof withdrawToAddress !== 'string' || !withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
             throw new Error('Please enter a valid Ethereum address for USDT (0x...)');
           }
           
@@ -757,7 +801,7 @@ export default function LandingPage() {
           }
           
           // Basic Ethereum address validation for USDC
-          if (!withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
+          if (!withdrawToAddress || typeof withdrawToAddress !== 'string' || !withdrawToAddress.startsWith('0x') || withdrawToAddress.length !== 42) {
             throw new Error('Please enter a valid Ethereum address for USDC (0x...)');
           }
           
@@ -955,7 +999,7 @@ export default function LandingPage() {
   // Handle file upload
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
-    if (file && file.type.startsWith('image/')) {
+    if (file && file.type && typeof file.type === 'string' && file.type.startsWith('image/')) {
       setTransactionScreenshot(file);
     } else {
       alert('Please select a valid image file');
@@ -1113,29 +1157,8 @@ export default function LandingPage() {
   // Main application content - only shown when wallet is connected
   return (
     <main className={styles.container}>
-      {/* Header Navigation */}
-      <header className={styles.header}>
-        <div className={styles.navLeft}>
-          <div className={styles.logo}>WalletBase</div>
-          <nav className={styles.nav}>
-            <a href="/" className={styles.navActive}>Home</a>
-            <a href="/market" className={styles.navLink}>Market</a>
-            <a href="/orders" className={styles.navLink}>Orders</a>
-            <a href="/ai-trading" className={styles.navLink}>$ Intelligent AI Trading</a>
-            <a href="/settings" className={styles.navLink}>Settings</a>
-          </nav>
-        </div>
-        <div className={styles.navRight}>
-          <div className={styles.walletInfo}>
-            <span className={styles.address}>
-              {userId || 'Loading...'}
-            </span>
-            <button onClick={handleDisconnect} className={styles.disconnectButton}>
-              Disconnect
-        </button>
-          </div>
-        </div>
-      </header>
+      {/* Navigation Component */}
+      <Navigation />
 
       {/* Wallet Information Section */}
       <section className={styles.walletSection}>
@@ -1158,19 +1181,29 @@ export default function LandingPage() {
           </div>
           
           <div className={styles.walletBalance}>
-            <div className={styles.balanceAmount}>
-              {getBalanceDisplay()}
+            <div className={styles.balanceHeader}>
+              <div className={styles.balanceLabel}>Portfolio Balance (USD)</div>
             </div>
-            <div className={styles.balanceLabel}>Balance</div>
+            
+            <div className={styles.balanceDisplay}>
+              <div className={styles.totalUSD}>
+                Total Portfolio Value: <span className={styles.totalUSDValue}>${usdBalances.total?.toFixed(2) || '0.00'}</span>
+              </div>
+              {lastPriceUpdate && (
+                <div className={styles.priceUpdate}>
+                  Last updated: {new Date(lastPriceUpdate).toLocaleTimeString()}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className={styles.walletStats}>
             <div className={styles.stat}>
               <div className={styles.statValue}>
-                <span className={styles.statPositive}>+0.0000 ETH</span>
+                <span className={styles.statPositive}>+$0.00</span>
                 <span className={styles.statArrow}>↗</span>
               </div>
-              <div className={styles.statLabel}>Today's P&L</div>
+              <div className={styles.statLabel}>Today's P&L (USD)</div>
             </div>
             <div className={styles.stat}>
               <div className={styles.statValue}>
@@ -1239,7 +1272,7 @@ export default function LandingPage() {
                 </select>
               </div>
               <div className={styles.modalInfo}>
-                <p>Current Balance: {getCurrentBalance()} {selectedToken}</p>
+                <p>Current Balance: ${usdBalances[selectedToken]?.toFixed(2) || '0.00'} USD</p>
                 <p>Network: {selectedToken === 'BTC' ? 'Bitcoin Network' : 'Ethereum Mainnet'}</p>
                 <div className={styles.receivingAddress}>
                   <label>Receiving Address:</label>
@@ -1455,7 +1488,7 @@ export default function LandingPage() {
                 </>
               )}
               <div className={styles.modalInfo}>
-                <p>Available Balance: {getCurrentBalance()} {selectedToken}</p>
+                <p>Available Balance: ${usdBalances[selectedToken]?.toFixed(2) || '0.00'} USD</p>
                 <p>Network: {selectedToken === 'BTC' ? 'Bitcoin Network' : 'Ethereum Mainnet'}</p>
               </div>
             </div>
@@ -1504,40 +1537,43 @@ export default function LandingPage() {
         {isLoading ? (
           <div className={styles.loading}>Loading market data...</div>
         ) : (
-          <div className={styles.cryptoGrid}>
+          <div className={styles.cryptoList}>
             {cryptoData.map((coin) => (
-              <div key={coin.id} className={styles.cryptoCard}>
-                <div className={styles.cryptoHeader}>
-                  <img src={coin.image} alt={coin.name} className={styles.cryptoIcon} />
-                  <div>
-                    <div className={styles.cryptoSymbol}>{coin.symbol}</div>
-                    <div className={styles.cryptoName}>{coin.name}</div>
+              <div key={coin.id} className={styles.cryptoListItem}>
+                <div className={styles.cryptoListHeader}>
+                  <div className={styles.cryptoListLeft}>
+                    <img src={coin.image} alt={coin.name} className={styles.cryptoIcon} />
+                    <div className={styles.cryptoListInfo}>
+                      <div className={styles.cryptoSymbol}>{coin.symbol}</div>
+                      <div className={styles.cryptoName}>{coin.name}</div>
+                    </div>
+                  </div>
+                  
+                  <div className={styles.cryptoListCenter}>
+                    <div className={styles.cryptoPrice}>
+                      ${formatPrice(coin.price)}
+                    </div>
+                    <div className={styles.cryptoChange}>
+                      <span className={coin.priceChange >= 0 ? styles.positive : styles.negative}>
+                        {formatPriceChange(coin.priceChange)} {formatPriceChangeAmount(coin.priceChangeAmount)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className={styles.cryptoListRight}>
+                    <div className={styles.cryptoVolume}>
+                      Volume: {formatVolume(coin.volume)}
+                    </div>
+                    <div className={styles.cryptoTrend}>
+                      <span className={coin.priceChange >= 0 ? styles.bull : styles.bear}>
+                        {coin.priceChange >= 0 ? '↗ BULL' : '↘ BEAR'}
+                      </span>
+                    </div>
+                    <button className={styles.tradeButton}>
+                      Trade {coin.symbol}
+                    </button>
                   </div>
                 </div>
-                
-                <div className={styles.cryptoPrice}>
-                  ${formatPrice(coin.price)}
-                </div>
-                
-                <div className={styles.cryptoChange}>
-                  <span className={coin.priceChange >= 0 ? styles.positive : styles.negative}>
-                    {formatPriceChange(coin.priceChange)} {formatPriceChangeAmount(coin.priceChangeAmount)}
-                  </span>
-                </div>
-                
-                <div className={styles.cryptoVolume}>
-                  Volume: {formatVolume(coin.volume)}
-                </div>
-                
-                <div className={styles.cryptoTrend}>
-                  <span className={coin.priceChange >= 0 ? styles.bull : styles.bear}>
-                    {coin.priceChange >= 0 ? '↗ BULL' : '↘ BEAR'}
-                  </span>
-                </div>
-                
-                <button className={styles.tradeButton}>
-                  Trade {coin.symbol}
-                </button>
               </div>
             ))}
           </div>
