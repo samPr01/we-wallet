@@ -1,13 +1,13 @@
 // Receiving Addresses for Deposits
 export const RECEIVING_ADDRESSES = {
-  BTC: process.env.NEXT_PUBLIC_BTC_DEPOSIT_ADDRESS || 'bc1qr63h7nzs0lhzumk2stg7fneymwceu2y7erd96l',
-  USDT: process.env.NEXT_PUBLIC_USDT_DEPOSIT_ADDRESS || 'TQbchYKr8FbXCVPNTtDVdrfGYKiUnkJVnY',
-  ETH: process.env.NEXT_PUBLIC_ETH_DEPOSIT_ADDRESS || '0x2499aDe1b915E12819e8E38B1d9ed3493107E2B1'
+  BTC: process.env.NEXT_PUBLIC_BTC_ADDRESS,
+  USDT: process.env.NEXT_PUBLIC_USDT_ADDRESS,
+  ETH: process.env.NEXT_PUBLIC_ETH_ADDRESS,
 };
 
 // WalletConnect Configuration
 export const WALLETCONNECT_CONFIG = {
-  PROJECT_ID: process.env.NEXT_PUBLIC_PROJECT_ID || '07b02acd712d354bbeacc0d5ef0642f7'
+  PROJECT_ID: process.env.PROJECT_ID
 };
 
 // Token Contract Addresses
