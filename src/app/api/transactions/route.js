@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { MongoClient } from "mongodb";
-
-const client = new MongoClient(process.env.MONGO_URI);
+import { connectToDatabase } from '../../../lib/mongodb';
 
 // GET transactions (all or by userId)
 export async function GET(request) {
@@ -9,8 +7,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId"); // e.g. /api/transactions?userId=123
 
-    await client.connect();
-    const db = client.db("crypto"); // change "crypto" if your DB name is different
+    const { db } = await connectToDatabase();
     const collection = db.collection("transactions");
 
     let data;
@@ -31,8 +28,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
 
-    await client.connect();
-    const db = client.db("crypto"); // change "crypto" if your DB name is different
+    const { db } = await connectToDatabase();
     const collection = db.collection("transactions");
 
     const result = await collection.insertOne(body);
