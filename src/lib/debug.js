@@ -44,7 +44,7 @@ export const debugWalletState = () => {
 
 export const checkEnvironmentVariables = () => {
   const envVars = {
-    PROJECT_ID: process.env.NEXT_PUBLIC_PROJECT_ID,
+    PROJECT_ID: process.env.PROJECT_ID,
     BTC_ADDRESS: process.env.NEXT_PUBLIC_BTC_DEPOSIT_ADDRESS,
     USDT_ADDRESS: process.env.NEXT_PUBLIC_USDT_DEPOSIT_ADDRESS,
     ETH_ADDRESS: process.env.NEXT_PUBLIC_ETH_DEPOSIT_ADDRESS,
