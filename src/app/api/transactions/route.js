@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import { MongoClient } from "mongodb";
 
 const client = new MongoClient(process.env.MONGO_URI);
@@ -19,9 +20,9 @@ export async function GET(request) {
       data = await collection.find().toArray();
     }
 
-    return Response.json(data, { status: 200 });
+    return NextResponse.json(data, { status: 200 });
   } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
@@ -36,8 +37,8 @@ export async function POST(request) {
 
     const result = await collection.insertOne(body);
 
-    return Response.json({ insertedId: result.insertedId }, { status: 201 });
+    return NextResponse.json({ insertedId: result.insertedId }, { status: 201 });
   } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

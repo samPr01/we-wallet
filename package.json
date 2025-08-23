@@ -26,6 +26,7 @@
     "web3modal": "^1.9.12"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.12.1",
     "pino-pretty": "^13.1.1"
   }
 }
