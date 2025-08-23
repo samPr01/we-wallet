@@ -18,35 +18,45 @@ export const UserProvider = ({ children }) => {
 
   // Load user data from localStorage on mount
   useEffect(() => {
-    const savedUserId = localStorage.getItem('walletbase_userId');
-    const savedWalletAddress = localStorage.getItem('walletbase_walletAddress');
+    const loadUserData = async () => {
+      const savedUserId = localStorage.getItem('walletbase_userId');
+      const savedWalletAddress = localStorage.getItem('walletbase_walletAddress');
     
-    if (savedUserId) {
-      setUserId(savedUserId);
-    }
-    if (savedWalletAddress) {
-      // Validate the saved wallet address before setting it
-      try {
-        if (savedWalletAddress.startsWith('0x') && savedWalletAddress.length === 42) {
-          // Try to get the proper checksum format
-          const { ethers } = require('ethers');
-          const checksumAddress = ethers.getAddress(savedWalletAddress);
-          setWalletAddress(checksumAddress);
-          // Update localStorage with corrected address
-          localStorage.setItem('walletbase_walletAddress', checksumAddress);
-        } else {
-          console.warn('Invalid wallet address format in localStorage:', savedWalletAddress);
+      if (savedUserId) {
+        setUserId(savedUserId);
+      }
+      if (savedWalletAddress && typeof savedWalletAddress === 'string') {
+        // Validate the saved wallet address before setting it
+        try {
+          if (savedWalletAddress.startsWith('0x') && savedWalletAddress.length === 42) {
+            // Try to get the proper checksum format
+            try {
+              const { ethers } = await import('ethers');
+              const checksumAddress = ethers.getAddress(savedWalletAddress);
+              setWalletAddress(checksumAddress);
+              // Update localStorage with corrected address
+              localStorage.setItem('walletbase_walletAddress', checksumAddress);
+            } catch (ethersError) {
+              console.warn('Failed to import ethers for address validation:', ethersError);
+              // Set the address as-is if ethers is not available
+              setWalletAddress(savedWalletAddress);
+            }
+          } else {
+            console.warn('Invalid wallet address format in localStorage:', savedWalletAddress);
+            // Clear invalid address
+            localStorage.removeItem('walletbase_walletAddress');
+            localStorage.removeItem('walletbase_userId');
+          }
+        } catch (error) {
+          console.warn('Failed to validate saved wallet address:', error);
           // Clear invalid address
           localStorage.removeItem('walletbase_walletAddress');
           localStorage.removeItem('walletbase_userId');
         }
-      } catch (error) {
-        console.warn('Failed to validate saved wallet address:', error);
-        // Clear invalid address
-        localStorage.removeItem('walletbase_walletAddress');
-        localStorage.removeItem('walletbase_userId');
       }
-    }
+    };
+    
+    loadUserData();
   }, []);
 
   // Save user data to localStorage whenever it changes
@@ -59,11 +69,11 @@ export const UserProvider = ({ children }) => {
     }
   }, [userId, walletAddress]);
 
-  const updateUser = (newUserId, newWalletAddress) => {
+  const updateUser = async (newUserId, newWalletAddress) => {
     // Validate wallet address before setting
-    if (newWalletAddress) {
+    if (newWalletAddress && typeof newWalletAddress === 'string') {
       try {
-        const { ethers } = require('ethers');
+        const { ethers } = await import('ethers');
         if (ethers.isAddress(newWalletAddress)) {
           const checksumAddress = ethers.getAddress(newWalletAddress);
           setUserId(newUserId);
@@ -73,6 +83,9 @@ export const UserProvider = ({ children }) => {
         }
       } catch (error) {
         console.error('Failed to validate wallet address in updateUser:', error);
+        // Set the address as-is if validation fails
+        setUserId(newUserId);
+        setWalletAddress(newWalletAddress);
       }
     } else {
       setUserId(newUserId);
