@@ -10,7 +10,7 @@ export const RECEIVING_ADDRESSES = {
 
 // WalletConnect Configuration
 export const WALLETCONNECT_CONFIG = {
-  PROJECT_ID: process.env.PROJECT_ID
+  PROJECT_ID: process.env.PROJECT_ID || '1cbaaa4394227512f60cf3d8fbf1d8cc'
 };
 
 // Token Contract Addresses
